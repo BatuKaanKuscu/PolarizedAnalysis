@@ -14,9 +14,9 @@ Node 22 ve üzeri gerekir. Harici çalışma zamanı bağımlılığı yoktur. S
 ## Kullanım
 
 1. Yağ türünü, referans ve numune adlarını girin.
-2. Aynı tip şeffaf kaplarda eşit yükseklikteki iki yağı mat beyaz arka plan önünde yan yana yerleştirin. Hazırlık kutularını işaretleyin.
+2. Aynı tip şeffaf kaplarda eşit yükseklikteki iki yağı aynı sade arka plan önünde yan yana yerleştirin. Hazırlık kutularını işaretleyin.
 3. Kamera açın veya iki kabı birlikte gösteren bir fotoğraf yükleyin.
-4. Referans ve numune kutularını yağın iç kısmına, beyaz kutuyu arka plana taşıyın. Önce bölge düğmesini seçip görüntüye dokunabilir, kutuları sürükleyebilir veya kutuya odaklanıp ok tuşlarını kullanabilirsiniz.
+4. Referans ve numune kutularını yağın iç kısmına taşıyın. Önce bölge düğmesini seçip görüntüye dokunabilir, kutuları sürükleyebilir veya kutuya odaklanıp ok tuşlarını kullanabilirsiniz.
 5. Ölçümü başlatın. Uygun olmayan çekimlerde verilen düzeltme önerilerini uygulayın.
 6. Sonucu cihazınıza kaydedin; JSON, CSV veya tarayıcının yazdır/PDF seçeneğiyle dışa aktarın.
 
@@ -24,13 +24,12 @@ Demo, sentetik bir çizim kullanır ve açıkça etiketlenir. Demo raporları no
 
 ## Yöntem
 
-- Görüntünün `object-fit: cover` ile görünür olan kısmına karşılık gelen üç bölge 64×64 piksele örneklenir.
+- Görüntünün `object-fit: cover` ile görünür olan kısmına karşılık gelen iki bölge 64×64 piksele örneklenir.
 - Ortalama R/G/B, aritmetik parlaklık `(R+G+B)/3`, kırpılan piksel oranı ve parlaklığın uzamsal standart sapması hesaplanır.
 - Kamerada 8 ayrı kare alınır; desteklenen tarayıcılarda video kare geri çağrısı kullanılır. Desteklemeyen tarayıcılarda 180 ms arayla örneklenir. Fotoğrafta yalnızca 1 kare vardır.
 - Her bölgenin ölçümlerinin ortancası raporlanır. RGB uzaklığı `sqrt(ΔR²+ΔG²+ΔB²)` (0–441,67), mutlak parlaklık farkı (0–255) ve işaretli kanal farkları gösterilir.
-- Beyaz bölge bir çekim ön kontrolüdür; beyaz dengesi düzeltmesi veya fiziksel kalibrasyon yapılmaz.
+- Ayrı arka plan kontrol bölgesi kullanılmaz; fiziksel kalibrasyon yapılmaz.
 - Bir numune alanının parlaklığı 25 altında veya 235 üstündeyse; herhangi bir kanalı ≤3 veya ≥252 olan pikseller %18'i aşıyorsa ölçüm reddedilir.
-- Beyaz alanın parlaklığı 100–240 dışında, kanal aralığı 28 üstünde, kırpılan pikseller %18 üstünde veya parlaklık standart sapması 18 üstündeyse ölçüm reddedilir.
 - Seri boyunca RGB farkının aralığı 10'u veya herhangi bir bölgenin ortanca rengine en büyük RGB uzaklığı 15'i aşıyorsa çekim değişken kabul edilir ve rapor üretilmez.
 
 Bu eşikler pratik çekim filtreleridir; laboratuvarla doğrulanmış sahtelik veya kalite eşikleri değildir. Otomatik kamera ayarları, görüntü sıkıştırma, ışık, kap geometrisi ve yağın doğal renk farkları ölçümü etkiler. Aynı ortalama renk, aynı kimyasal içerik anlamına gelmez. Referansın orijinalliği uygulama tarafından doğrulanmaz. Polarizasyon, spektrometre, fiziksel geçirgenlik veya bulanıklık ölçümü yapılmaz.

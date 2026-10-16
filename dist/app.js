@@ -1,8 +1,8 @@
 import {measure,quality,summarize,cropRect,overlap,METHOD} from './analysis.mjs';
 const $=id=>document.getElementById(id),all=s=>[...document.querySelectorAll(s)],video=$('video'),stage=$('stage'),canvas=$('canvas'),ctx=canvas.getContext('2d',{willReadFrequently:true});
-const KEY='liquid-lens-reports-v2',roles=['reference','sample','white'];
+const KEY='liquid-lens-reports-v2',roles=['reference','sample'];
 let mode='none',stream=null,imageURL=null,selected='reference',busy=false,generation=0,torch=false,lastReport=null,regions=defaults(),records=[],storageError=false;
-function defaults(){return {reference:{x:.15,y:.40,w:.22,h:.26},sample:{x:.63,y:.40,w:.22,h:.26},white:{x:.44,y:.12,w:.12,h:.12}};}
+function defaults(){return {reference:{x:.15,y:.40,w:.22,h:.26},sample:{x:.63,y:.40,w:.22,h:.26}};}
 function say(text){$('message').textContent=text;}
 function node(tag,text,cls){const n=document.createElement(tag);if(text!==undefined)n.textContent=text;if(cls)n.className=cls;return n;}
 function button(text,fn,cls){const b=node('button',text,cls);b.onclick=fn;return b;}
@@ -68,7 +68,7 @@ $('upload').onchange=async e=>{
  const file=e.target.files[0];e.target.value='';if(!file||busy)return;
  if(!file.type.startsWith('image/')){say('Bir görüntü dosyası seçin.');return;}if(file.size>25*1024*1024){say('Fotoğraf 25 MB sınırını aşıyor. Daha küçük bir görüntü seçin.');return;}
  const ticket=++generation;clearSource();setMode('none');busy=true;controls();$('stop').disabled=false;
- try{imageURL=URL.createObjectURL(file);$('photo').src=imageURL;await $('photo').decode();if(ticket!==generation)return;setMode('photo');say('Tek fotoğraf modu. İki kap ve beyaz arka plan aynı fotoğrafta bulunmalı.');}
+ try{imageURL=URL.createObjectURL(file);$('photo').src=imageURL;await $('photo').decode();if(ticket!==generation)return;setMode('photo');say('Tek fotoğraf modu. İki kap aynı fotoğrafta bulunmalı.');}
  catch{if(ticket===generation){clearSource();setMode('none');say('Fotoğraf okunamadı. JPEG, PNG veya WebP deneyin.');}}
  finally{if(ticket===generation){busy=false;controls();liveQuality();}}
 };
@@ -111,10 +111,10 @@ function renderReport(r){
  const chart=node('div',undefined,'channel-chart');chart.append(node('h3','Kanal farkları · Numune − Referans'));r.channels.forEach((delta,i)=>{const row=node('div',undefined,'channel-row'),track=node('div',undefined,'channel-track'),dot=node('span',undefined,'channel-dot');dot.style.left=(50+delta/255*50)+'%';track.append(dot);row.append(node('span',['R','G','B'][i]),track,node('span',(delta>0?'+':'')+number(delta)));chart.append(row);});chart.append(node('p','Ortadaki çizgi sıfır farktır. Sol: numunede daha düşük, sağ: daha yüksek kanal değeri.','hint'));result.append(chart);
  result.append(node('p','Bu değerler iki alanın kamera renkleri arasındaki farkı gösterir. Düşük fark orijinallik kanıtı değildir; yüksek fark da karışım kanıtı değildir. Işık, kap ve doğal renk farklılıkları sonucu etkileyebilir.'));
  if(r.notes)result.append(node('p','Not: '+r.notes));
- const details=node('details'),summary=node('summary','Çekim kontrolü ve yöntem');details.append(summary,node('p',`Beyaz alan RGB: ${[r.white.r,r.white.g,r.white.b].map(n=>number(n,0)).join(' / ')}. Seri içi en büyük bölge sapması: ${number(r.drift)}. Yöntem: ${r.method}. Beyaz alan sadece ön kontroldür; fiziksel kalibrasyon yapılmamıştır. Pratik eşikler laboratuvar doğrulamasından geçmemiştir.`));result.append(details);
+ const details=node('details'),summary=node('summary','Çekim kontrolü ve yöntem');details.append(summary,node('p',`Seri içi en büyük bölge sapması: ${number(r.drift)}. Yöntem: ${r.method}. Fiziksel kalibrasyon yapılmamıştır. Pratik eşikler laboratuvar doğrulamasından geçmemiştir.`));result.append(details);
  const actions=node('div',undefined,'actions'),save=button(records.some(x=>x.id===r.id)?'Kaydedildi':'Cihaza kaydet',()=>{if(saveRecord(r)){save.textContent='Kaydedildi';save.disabled=true;}});save.disabled=r.demo||records.some(x=>x.id===r.id);actions.append(save,button('JSON indir',()=>downloadJSON(r)),button('CSV indir',()=>downloadCSV([r])),button('Yazdır / PDF',()=>window.print()));result.append(actions);
 }
-function validReport(r){return r&&r.method===METHOD&&typeof r.id==='string'&&typeof r.referenceName==='string'&&typeof r.sampleName==='string'&&typeof r.oilType==='string'&&typeof r.notes==='string'&&!r.demo&&Number.isFinite(Date.parse(r.createdAt))&&['distance','brightness','range','drift','frames'].every(k=>Number.isFinite(r[k]))&&roles.every(role=>r[role]&&['r','g','b','brightness','clipped','spread'].every(k=>Number.isFinite(r[role][k])))&&Array.isArray(r.channels)&&r.channels.length===3&&r.channels.every(Number.isFinite);}
+function validReport(r){return r&&['paired-rgb-v2',METHOD].includes(r.method)&&typeof r.id==='string'&&typeof r.referenceName==='string'&&typeof r.sampleName==='string'&&typeof r.oilType==='string'&&typeof r.notes==='string'&&!r.demo&&Number.isFinite(Date.parse(r.createdAt))&&['distance','brightness','range','drift','frames'].every(k=>Number.isFinite(r[k]))&&roles.every(role=>r[role]&&['r','g','b','brightness','clipped','spread'].every(k=>Number.isFinite(r[role][k])))&&Array.isArray(r.channels)&&r.channels.length===3&&r.channels.every(Number.isFinite);}
 try{const parsed=JSON.parse(localStorage.getItem(KEY)||'[]');records=Array.isArray(parsed)?parsed.filter(validReport).slice(0,30):[];}catch{storageError=true;}
 function saveRecord(r){if(r.demo)return false;if(records.some(x=>x.id===r.id))return true;const next=[r,...records].slice(0,30);try{localStorage.setItem(KEY,JSON.stringify(next));records=next;renderHistory();say('Rapor bu tarayıcıya kaydedildi. Fotoğraf saklanmadı.');return true;}catch{say('Tarayıcıya kayıt yapılamadı. JSON veya CSV indirerek raporu saklayın.');return false;}}
 function renderHistory(){

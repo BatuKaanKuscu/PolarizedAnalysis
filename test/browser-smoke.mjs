@@ -18,13 +18,14 @@ try{
  await page.locator('#analyze').click();await page.locator('#result').waitFor({state:'visible'});
  assert.ok(await page.locator('.demo-alert').isVisible());assert.ok(await page.getByRole('button',{name:'Cihaza kaydet',exact:true}).isDisabled());
  assert.equal(await page.locator('.metric b').first().textContent(),'32,6');
- const data=await page.locator('#demoCanvas').evaluate(c=>c.toDataURL('image/png').split(',')[1]);
+ assert.equal(await page.locator('.roi').count(),2);assert.equal(await page.locator('[data-role="white"]').count(),0);
+ const data=await page.locator('#demoCanvas').evaluate(c=>{const ctx=c.getContext('2d');ctx.fillStyle='rgb(50,75,125)';ctx.fillRect(0,0,c.width,c.height*.25);return c.toDataURL('image/png').split(',')[1];});
  await page.locator('#upload').setInputFiles({name:'paired.png',mimeType:'image/png',buffer:Buffer.from(data,'base64')});
  await page.waitForFunction(()=>document.getElementById('cameraStatus').textContent==='Tek fotoğraf');
  await page.locator('#analyze').click();await page.locator('#result').waitFor({state:'visible'});
  assert.equal(await page.locator('.demo-alert').count(),0);
  const download=page.waitForEvent('download');await page.getByRole('button',{name:'JSON indir',exact:true}).click();
- const saved=await download,json=JSON.parse(await readFile(await saved.path(),'utf8'));assert.equal(json.source,'photo');assert.equal(json.frames,1);assert.equal(json.demo,false);assert.deepEqual(json.conditions,[true,true,true]);
+ const saved=await download,json=JSON.parse(await readFile(await saved.path(),'utf8'));assert.equal(json.source,'photo');assert.equal(json.frames,1);assert.equal(json.demo,false);assert.deepEqual(json.conditions,[true,true,true]);assert.equal('white' in json,false);assert.equal('white' in json.regions,false);
  await page.getByRole('button',{name:'Cihaza kaydet',exact:true}).click();assert.equal(await page.locator('#historyCount').textContent(),'1');
  await page.locator('[data-view="history"]').click();assert.equal(await page.locator('.history-item').count(),1);
  await page.reload();assert.equal(await page.locator('#historyCount').textContent(),'1');

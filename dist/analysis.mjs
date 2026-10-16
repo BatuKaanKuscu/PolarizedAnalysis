@@ -1,4 +1,4 @@
-export const METHOD='paired-rgb-v2';
+export const METHOD='paired-rgb-v3';
 export function measure(data,width,height){
  const n=width*height;
  if(!Number.isInteger(n)||n<1||data.length!==n*4)throw new Error('Geçersiz görüntü');
@@ -12,19 +12,14 @@ export function compare(a,b){return {distance:distance(a,b),brightness:Math.abs(
 export function quality(f){
  const issues=[];
  for(const [key,label]of [['reference','Referans'],['sample','Numune']]){const s=f[key];if(s.brightness<25)issues.push(`${label} çok karanlık; ışığı artırın.`);if(s.brightness>235)issues.push(`${label} çok aydınlık; pozlamayı azaltın.`);if(s.clipped>.18)issues.push(`${label} alanında renk kanalları kırpılıyor; parlamadan kaçının.`);}
- const w=f.white;
- if(w.brightness<100||w.brightness>240)issues.push('Beyaz alanın ışığı uygun değil; mat beyaz bir bölge seçin.');
- if(Math.max(w.r,w.g,w.b)-Math.min(w.r,w.g,w.b)>28)issues.push('Beyaz alan renkli görünüyor; arka planı veya ışığı değiştirin.');
- if(w.clipped>.18)issues.push('Beyaz alan aşırı pozlanmış; ışığı azaltın.');
- if(w.spread>18)issues.push('Beyaz alan homojen değil; gölge veya kenar içermeyen bir bölge seçin.');
  return issues;
 }
 export function summarize(frames){
  if(!frames.length)throw new Error('Ölçüm yok');
  const median=v=>{v=[...v].sort((a,b)=>a-b);const m=Math.floor(v.length/2);return v.length%2?v[m]:(v[m-1]+v[m])/2;},stats={};
- for(const role of ['reference','sample','white']){stats[role]={};for(const key of ['r','g','b','brightness','clipped','spread'])stats[role][key]=median(frames.map(f=>f[role][key]));}
+ for(const role of ['reference','sample']){stats[role]={};for(const key of ['r','g','b','brightness','clipped','spread'])stats[role][key]=median(frames.map(f=>f[role][key]));}
  const diffs=frames.map(f=>distance(f.reference,f.sample)),range=Math.max(...diffs)-Math.min(...diffs),issues=[...new Set(frames.flatMap(quality))];
- const drift=Math.max(...frames.flatMap(f=>['reference','sample','white'].map(role=>distance(f[role],stats[role]))));
+ const drift=Math.max(...frames.flatMap(f=>['reference','sample'].map(role=>distance(f[role],stats[role]))));
  if(frames.length>1&&(range>10||drift>15))issues.push('Seri çekim değişken; telefonu ve ışığı sabitleyip yeniden ölçün.');
  return {method:METHOD,...stats,...compare(stats.reference,stats.sample),frames:frames.length,range,drift,issues};
 }
