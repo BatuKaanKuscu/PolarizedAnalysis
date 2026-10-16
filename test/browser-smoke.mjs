@@ -18,6 +18,12 @@ try{
  await page.locator('#analyze').click();await page.locator('#result').waitFor({state:'visible'});
  assert.ok(await page.locator('.demo-alert').isVisible());assert.ok(await page.getByRole('button',{name:'Cihaza kaydet',exact:true}).isDisabled());
  assert.equal(await page.locator('.metric b').first().textContent(),'32,6');
+ assert.ok((await page.locator('#result').textContent()).includes('8 kare'));
+ await page.locator('#demoPause').click();assert.equal(await page.locator('#demoPause').getAttribute('aria-pressed'),'true');await page.locator('#analyze').click();assert.ok((await page.locator('#result').textContent()).includes('1 kare'));
+ await page.locator('#demoPause').click();
+ for(const scenario of ['color','light','glare']){await page.locator('#demoScenario').selectOption(scenario);await page.locator('#analyze').click();await page.waitForFunction(()=>document.getElementById('progress').hidden);assert.equal(await page.locator('#result').isHidden(),true);assert.ok((await page.locator('#message').textContent()).includes(scenario==='glare'?'kırpılıyor':'değişken'),scenario);}
+ assert.equal(await page.locator('#historyCount').textContent(),'0');await page.locator('#demoScenario').selectOption('stable');
+ await mkdir('test-results',{recursive:true});await page.locator('.capture').screenshot({path:'test-results/animated-demo.png'});
  assert.equal(await page.locator('.roi').count(),2);assert.equal(await page.locator('[data-role="white"]').count(),0);
  const data=await page.locator('#demoCanvas').evaluate(c=>{const ctx=c.getContext('2d');ctx.fillStyle='rgb(50,75,125)';ctx.fillRect(0,0,c.width,c.height*.25);return c.toDataURL('image/png').split(',')[1];});
  await page.locator('#upload').setInputFiles({name:'paired.png',mimeType:'image/png',buffer:Buffer.from(data,'base64')});
@@ -45,5 +51,6 @@ try{
  await page.locator('#positions').click();
  const whiteImage=await page.evaluate(()=>{const c=document.createElement('canvas');c.width=800;c.height=500;const d=c.getContext('2d');d.fillStyle='#fff';d.fillRect(0,0,800,500);return c.toDataURL('image/png').split(',')[1];});
  await page.locator('#upload').setInputFiles({name:'overexposed.png',mimeType:'image/png',buffer:Buffer.from(whiteImage,'base64')});await page.waitForFunction(()=>document.getElementById('cameraStatus').textContent==='Tek fotoğraf');await page.locator('#analyze').click();assert.ok((await page.locator('#message').textContent()).includes('Ölçüm kaydedilmedi'));assert.equal(await page.locator('#result').isHidden(),true);
- assert.deepEqual(errors,[]);console.log('Browser checks passed: demo, photo, persistence, download, mobile width, eight-frame capture, camera lifecycle, overlapping regions and overexposure rejection.');
+ const reduced=await context.newPage();await reduced.emulateMedia({reducedMotion:'reduce'});await reduced.goto(`http://127.0.0.1:${port}`);await reduced.locator('#demo').click();assert.equal(await reduced.locator('#demoPause').getAttribute('aria-pressed'),'true');assert.equal(await reduced.locator('#analyze').isDisabled(),false);await reduced.locator('#analyze').click();assert.ok((await reduced.locator('#result').textContent()).includes('1 kare'));await reduced.close();
+ assert.deepEqual(errors,[]);console.log('Browser checks passed: four animation scenarios, pause, reduced motion, photo, persistence, download, eight-frame capture, camera lifecycle and rejection cases.');
 }finally{await browser?.close();server.kill();}

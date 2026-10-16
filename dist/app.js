@@ -1,23 +1,34 @@
 import {measure,quality,summarize,cropRect,overlap,METHOD} from './analysis.mjs';
+import {drawDemo,scenarios} from './demo.mjs';
 const $=id=>document.getElementById(id),all=s=>[...document.querySelectorAll(s)],video=$('video'),stage=$('stage'),canvas=$('canvas'),ctx=canvas.getContext('2d',{willReadFrequently:true});
 const KEY='liquid-lens-reports-v2',roles=['reference','sample'];
 let mode='none',stream=null,imageURL=null,selected='reference',busy=false,generation=0,torch=false,lastReport=null,regions=defaults(),records=[],storageError=false;
+let demoAnimation=null,demoElapsed=0,demoStarted=0,demoPaused=false,demoScenario='stable';
+const reducedMotion=matchMedia('(prefers-reduced-motion: reduce)');
+function demoTime(){return demoElapsed+(demoPaused?0:performance.now()-demoStarted);}
+function stopDemo(){if(demoAnimation!==null)cancelAnimationFrame(demoAnimation);demoAnimation=null;}
+function paintDemo(){const rect=stage.getBoundingClientRect(),c=$('demoCanvas'),w=Math.round(rect.width*2),h=Math.round(rect.height*2);if(c.width!==w||c.height!==h){c.width=w;c.height=h;}drawDemo(c,demoScenario,demoTime());}
+function animateDemo(){if(mode!=='demo'||demoPaused)return;paintDemo();demoAnimation=requestAnimationFrame(animateDemo);}
+function updateDemoExpected(){$('demoExpected').textContent=demoPaused?'Duraklatıldı: tek kare ölçülür; zamana göre değişim sınanmaz.':scenarios[demoScenario].expected;}
+function setDemoPaused(paused){if(paused===demoPaused)return;demoElapsed=demoTime();demoStarted=performance.now();demoPaused=paused;stopDemo();if(!paused)animateDemo();$('demoPause').textContent=paused?'▶ Devam et':'Ⅱ Duraklat';$('demoPause').setAttribute('aria-pressed',String(paused));updateDemoExpected();invalidate();controls();}
+function restartDemo(){stopDemo();demoElapsed=0;demoStarted=performance.now();paintDemo();if(!demoPaused)animateDemo();invalidate();liveQuality();}
 function defaults(){return {reference:{x:.15,y:.40,w:.22,h:.26},sample:{x:.63,y:.40,w:.22,h:.26}};}
 function say(text){$('message').textContent=text;}
 function node(tag,text,cls){const n=document.createElement(tag);if(text!==undefined)n.textContent=text;if(cls)n.className=cls;return n;}
 function button(text,fn,cls){const b=node('button',text,cls);b.onclick=fn;return b;}
-function ready(){return mode!=='none'&&all('.condition').every(c=>c.checked)&&$('refName').value.trim()&&$('sampleName').value.trim();}
+function ready(){return mode==='demo'||(mode!=='none'&&all('.condition').every(c=>c.checked)&&$('refName').value.trim()&&$('sampleName').value.trim());}
 function controls(){
  $('analyze').disabled=busy||!ready();$('start').disabled=busy;$('upload').disabled=busy;document.querySelector('.upload').setAttribute('aria-disabled',String(busy));
  $('stop').disabled=mode==='none'&&!busy;
  $('torch').disabled=busy||!stream?.getVideoTracks()[0]?.getCapabilities?.().torch;
  all('.placement button,.roi,.setup input,.setup select,.setup textarea').forEach(e=>e.disabled=busy);
  $('demo').disabled=busy;
+ all('#demoPanel button,#demoPanel select').forEach(e=>e.disabled=busy);
 }
 function stopCamera(){stream?.getTracks().forEach(t=>t.stop());stream=null;video.srcObject=null;torch=false;$('torch').textContent='Fener';}
-function clearSource(){stopCamera();if(imageURL)URL.revokeObjectURL(imageURL);imageURL=null;$('photo').removeAttribute('src');}
+function clearSource(){stopCamera();stopDemo();stage.classList.remove('measuring');if(imageURL)URL.revokeObjectURL(imageURL);imageURL=null;$('photo').removeAttribute('src');}
 function invalidate(){$('result').hidden=true;lastReport=null;}
-function setMode(next){mode=next;video.hidden=next!=='camera';$('photo').hidden=next!=='photo';$('demoCanvas').hidden=next!=='demo';$('placeholder').hidden=next!=='none';$('regions').hidden=next==='none';$('demoBadge').hidden=next!=='demo';$('cameraStatus').textContent={none:'Kaynak bekleniyor',camera:'Canlı kamera',photo:'Tek fotoğraf',demo:'Örnek görüntü'}[next];invalidate();controls();drawRegions();}
+function setMode(next){mode=next;video.hidden=next!=='camera';$('photo').hidden=next!=='photo';$('demoCanvas').hidden=next!=='demo';$('placeholder').hidden=next!=='none';$('regions').hidden=next==='none';$('demoBadge').hidden=next!=='demo';$('demoPanel').hidden=next!=='demo';$('cameraStatus').textContent={none:'Kaynak bekleniyor',camera:'Canlı kamera',photo:'Tek fotoğraf',demo:'Animasyonlu test'}[next];invalidate();controls();drawRegions();}
 function select(role){selected=role;all('.placement [data-role]').forEach(b=>{b.classList.toggle('active',b.dataset.role===role);b.setAttribute('aria-pressed',String(b.dataset.role===role));});all('.roi').forEach(b=>b.classList.toggle('selected',b.dataset.role===role));}
 function drawRegions(){for(const role of roles){const e=document.querySelector(`.roi[data-role="${role}"]`),r=regions[role];Object.assign(e.style,{left:r.x*100+'%',top:r.y*100+'%',width:r.w*100+'%',height:r.h*100+'%'});}select(selected);}
 function move(role,x,y){const r=regions[role];r.x=Math.max(0,Math.min(1-r.w,x-r.w/2));r.y=Math.max(.07,Math.min(1-r.h,y-r.h/2));drawRegions();invalidate();liveQuality();}
@@ -33,6 +44,7 @@ all('.roi').forEach(b=>{
 $('positions').onclick=()=>{regions=defaults();drawRegions();invalidate();liveQuality();};
 function geometryIssues(){for(let i=0;i<roles.length;i++)for(let j=i+1;j<roles.length;j++)if(overlap(regions[roles[i]],regions[roles[j]]))return ['Ölçüm kutuları örtüşüyor. Alanları birbirinden ayırın.'];return [];}
 function capture(){
+ if(mode==='demo')paintDemo();
  const source=mode==='camera'?video:mode==='photo'?$('photo'):$('demoCanvas');
  const w=source.videoWidth||source.naturalWidth||source.width,h=source.videoHeight||source.naturalHeight||source.height;
  if(!w||!h||mode==='none')throw new Error('Görüntü hazır değil. Yeniden kamera veya fotoğraf açın.');
@@ -73,10 +85,12 @@ $('upload').onchange=async e=>{
  finally{if(ticket===generation){busy=false;controls();liveQuality();}}
 };
 $('demo').onclick=()=>{
- generation++;clearSource();regions=defaults();const c=$('demoCanvas'),rect=stage.getBoundingClientRect();c.width=Math.round(rect.width*2);c.height=Math.round(rect.height*2);const d=c.getContext('2d');d.fillStyle='rgb(215,215,208)';d.fillRect(0,0,c.width,c.height);
- for(const [x,color]of [[.08,'rgb(163,156,66)'],[.57,'rgb(192,165,78)']]){d.fillStyle='rgba(50,70,30,.14)';d.fillRect(c.width*x,c.height*.25,c.width*.35,c.height*.67);d.fillStyle=color;d.fillRect(c.width*(x+.015),c.height*.34,c.width*.32,c.height*.55);}
- setMode('demo');liveQuality();say('Demo sentetik bir çizimdir; gerçek bir yağ ölçümü değildir. İsimleri yazıp hazırlık kutularını işaretleyerek rapor akışını deneyin.');
+ generation++;clearSource();regions=defaults();demoScenario=$('demoScenario').value;demoPaused=reducedMotion.matches;$('demoPause').textContent=demoPaused?'▶ Devam et':'Ⅱ Duraklat';$('demoPause').setAttribute('aria-pressed',String(demoPaused));setMode('demo');restartDemo();updateDemoExpected();say('Animasyonlu demo sentetik veridir. Hazırlık onayları gerekmez. Test için karşılaştırmayı başlatın; gerçek numune kaydı oluşturulmaz.');
 };
+$('demoScenario').onchange=()=>{demoScenario=$('demoScenario').value;updateDemoExpected();restartDemo();say('Test senaryosu değişti. Karşılaştırmayı başlatarak beklenen davranışı deneyin.');};
+$('demoPause').onclick=()=>setDemoPaused(!demoPaused);
+$('demoRestart').onclick=restartDemo;
+reducedMotion.addEventListener('change',e=>{if(e.matches&&mode==='demo'&&!busy)setDemoPaused(true);});
 all('.setup input,.setup select,.setup textarea').forEach(e=>e.addEventListener('input',()=>{invalidate();controls();}));
 function nextFrame(){
  return new Promise((resolve,reject)=>{
@@ -90,21 +104,21 @@ $('analyze').onclick=async()=>{
  const geometry=geometryIssues();if(geometry.length){say(geometry[0]);return;}
  invalidate();busy=true;controls();$('progress').hidden=false;$('progress').value=0;say('Alanlar ölçülüyor; telefonu ve numuneleri sabit tutun.');
  try{
-  const frames=[],count=mode==='camera'?8:1;$('progress').max=count;
-  for(let i=0;i<count;i++){if(sourceMode==='camera')await nextFrame();if(ticket!==generation)return;frames.push(capture());$('progress').value=i+1;}
+  const frames=[],count=mode==='camera'||(mode==='demo'&&!demoPaused)?8:1;$('progress').max=count;stage.classList.add('measuring');
+  for(let i=0;i<count;i++){if(sourceMode==='camera')await nextFrame();else if(sourceMode==='demo'&&count>1)await new Promise(resolve=>setTimeout(resolve,180));if(ticket!==generation)return;frames.push(capture());$('progress').value=i+1;}
   const report=summarize(frames);
   if(report.issues.length){say('Ölçüm kaydedilmedi. '+report.issues.join(' '));return;}
-  Object.assign(report,{id:crypto.randomUUID(),createdAt:new Date().toISOString(),oilType:$('oilType').value,referenceName:$('refName').value.trim(),sampleName:$('sampleName').value.trim(),notes:$('notes').value.trim(),source:sourceMode,demo:sourceMode==='demo',regions:structuredClone(regions),conditions:all('.condition').map(c=>c.checked)});
+  Object.assign(report,{id:crypto.randomUUID(),createdAt:new Date().toISOString(),oilType:$('oilType').value,referenceName:$('refName').value.trim()||'Demo referans',sampleName:$('sampleName').value.trim()||'Demo numune',notes:$('notes').value.trim(),source:sourceMode,demo:sourceMode==='demo',...(sourceMode==='demo'?{demoScenario,demoPaused}:{}),regions:structuredClone(regions),conditions:all('.condition').map(c=>c.checked)});
   renderReport(report);say(sourceMode==='demo'?'Demo raporu hazır. Gerçek ölçüm değildir ve kayıtlara eklenemez.':'Karşılaştırma hazır. Raporu inceleyip cihazınıza kaydedebilirsiniz.');$('result').scrollIntoView({behavior:'smooth',block:'start'});
  }catch(e){if(ticket===generation)say(e.message);}
- finally{if(ticket===generation){busy=false;$('progress').hidden=true;controls();liveQuality();}}
+ finally{if(ticket===generation){stage.classList.remove('measuring');busy=false;$('progress').hidden=true;controls();liveQuality();}}
 };
 const number=(n,d=1)=>Number(n).toLocaleString('tr-TR',{minimumFractionDigits:d,maximumFractionDigits:d});
 const date=s=>new Date(s).toLocaleString('tr-TR');
 const rgb=s=>`rgb(${Math.round(s.r)},${Math.round(s.g)},${Math.round(s.b)})`;
 function renderReport(r){
  lastReport=r;const result=$('result');result.replaceChildren();result.hidden=false;
- if(r.demo)result.append(node('p','DEMO · Bu rapor sentetik görüntüden üretildi; gerçek bir yağ numunesini temsil etmez.','demo-alert'));
+ if(r.demo)result.append(node('p',`DEMO · ${scenarios[r.demoScenario]?.name||'Sentetik görüntü'}${r.demoPaused?' · Duraklatılmış tek kare':''}. Gerçek bir yağ numunesini temsil etmez.`,'demo-alert'));
  const head=node('div',undefined,'result-heading'),left=node('div');left.append(node('span','03 / ÖLÇÜM RAPORU','eyebrow'),node('h2','Görünür fark kaydedildi'),node('p',`${r.oilType} · ${date(r.createdAt)} · ${r.frames} kare`));head.append(left,node('span',r.frames>1?'Seri kontrolü geçti':'Tek kare · kararlılık ölçülmedi','status'));result.append(head);
  const swatches=node('div',undefined,'swatches');for(const [role,label]of [['reference',r.referenceName],['sample',r.sampleName]]){const wrap=node('div',undefined,'swatch'),color=node('i'),labelNode=node('div',label);color.style.background=rgb(r[role]);labelNode.append(node('small',`${role==='reference'?'Referans':'Numune'} · RGB ${[r[role].r,r[role].g,r[role].b].map(n=>number(n,0)).join(' / ')}`));wrap.append(color,labelNode);swatches.append(wrap);}result.append(swatches);
  const metrics=node('div',undefined,'metrics');for(const [value,label,note]of [[r.distance,'RGB uzaklığı','0–441,7 · kamera birimi'],[r.brightness,'Parlaklık farkı','0–255 · kamera birimi'],[r.range,'Seri fark aralığı',r.frames>1?'Kareler arası RGB fark değişimi':'Tek karede değerlendirilemez']]){const m=node('div',undefined,'metric');m.append(node('b',label==='Seri fark aralığı'&&r.frames===1?'—':number(value)),node('span',label),node('small',note));metrics.append(m);}result.append(metrics);
@@ -127,8 +141,8 @@ function downloadJSON(r){download(`liquid-lens-${r.id}.json`,JSON.stringify({...
 function downloadCSV(rows){const headers=['Tarih','Yağ türü','Referans','Numune','Kaynak','Demo','Kare sayısı','RGB farkı','Parlaklık farkı','Seri aralığı','R farkı','G farkı','B farkı','Notlar','Yöntem','Sınır'];const quote=v=>'"'+(typeof v==='string'&&/^[\s]*[=+@-]/.test(v)?"'"+v:String(v)).replaceAll('"','""')+'"';const data=rows.map(r=>[r.createdAt,r.oilType,r.referenceName,r.sampleName,r.source,r.demo,r.frames,r.distance,r.brightness,r.range,...r.channels,r.notes,r.method,'Saflık ve karışım oranı belirlenemez']);download('liquid-lens-rapor.csv','\uFEFF'+[headers,...data].map(row=>row.map(quote).join(',')).join('\r\n'),'text/csv;charset=utf-8');}
 $('exportAll').onclick=()=>downloadCSV(records);
 $('clearHistory').onclick=()=>{if(!confirm('Bu tarayıcıdaki tüm ölçüm raporları silinsin mi?'))return;try{localStorage.removeItem(KEY);records=[];renderHistory();invalidate();}catch{alert('Kayıtlar temizlenemedi.');}};
-function showView(view){all('.view').forEach(e=>e.hidden=e.id!=='view-'+view);all('.tab').forEach(b=>{const active=b.dataset.view===view;b.classList.toggle('active',active);if(active)b.setAttribute('aria-current','page');else b.removeAttribute('aria-current');});if(view!=='measure'&&mode==='camera')$('stop').click();if(view==='history')renderHistory();}
+function showView(view){all('.view').forEach(e=>e.hidden=e.id!=='view-'+view);all('.tab').forEach(b=>{const active=b.dataset.view===view;b.classList.toggle('active',active);if(active)b.setAttribute('aria-current','page');else b.removeAttribute('aria-current');});if(view!=='measure'&&(mode==='camera'||mode==='demo'))$('stop').click();if(view==='history')renderHistory();}
 all('.tab').forEach(b=>b.onclick=()=>{if(busy)return;showView(b.dataset.view);});
-document.addEventListener('visibilitychange',()=>{if(document.hidden&&(stream||busy)){$('stop').click();say('Sayfa arka plana geçtiği için kamera kapatıldı. Yeniden açabilirsiniz.');}});
-window.addEventListener('pagehide',()=>{generation++;stopCamera();if(imageURL)URL.revokeObjectURL(imageURL);});
+document.addEventListener('visibilitychange',()=>{if(document.hidden&&(stream||busy)){$('stop').click();say('Sayfa arka plana geçtiği için çekim durduruldu. Yeniden açabilirsiniz.');}else if(document.hidden&&mode==='demo')setDemoPaused(true);});
+window.addEventListener('pagehide',()=>{generation++;stopCamera();stopDemo();if(imageURL)URL.revokeObjectURL(imageURL);});
 drawRegions();renderHistory();controls();

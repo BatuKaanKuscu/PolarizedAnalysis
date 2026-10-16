@@ -20,7 +20,7 @@ Node 22 ve üzeri gerekir. Harici çalışma zamanı bağımlılığı yoktur. S
 5. Ölçümü başlatın. Uygun olmayan çekimlerde verilen düzeltme önerilerini uygulayın.
 6. Sonucu cihazınıza kaydedin; JSON, CSV veya tarayıcının yazdır/PDF seçeneğiyle dışa aktarın.
 
-Demo, sentetik bir çizim kullanır ve açıkça etiketlenir. Demo raporları normal kayıt defterine eklenmez. Gerçek kameranın veya kimyasal bir analizin doğrulaması olarak kullanılamaz.
+Demo, sentetik animasyonlar kullanır ve açıkça etiketlenir. “Animasyonlu testleri aç” ile sabit numune, değişen renk, dalgalanan ışık ve hareketli parlama senaryolarını deneyebilirsiniz. Hazırlık onayları demo için gerekmez. Çalışan animasyondan 180 ms aralıkla 8 kare alınır; duraklatılmış animasyon tek kare olarak ölçülür. Hareket azaltma tercihi açıkken demo duraklatılmış başlar. Senaryoların beklenen davranışı ekranda açıklanır. Demo raporları normal kayıt defterine eklenmez. Gerçek kameranın veya kimyasal bir analizin doğrulaması olarak kullanılamaz.
 
 ## Yöntem
 
