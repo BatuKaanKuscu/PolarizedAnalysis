@@ -1,7 +1,13 @@
 import {measure,quality,summarize,cropRect,overlap,METHOD} from './analysis.mjs';
 import {drawDemo,scenarios} from './demo.mjs';
+import {createWorkspace,normalizeWorkspace,addProfile,updateProfile,removeProfile,withReport} from './workspace.mjs';
 const $=id=>document.getElementById(id),all=s=>[...document.querySelectorAll(s)],video=$('video'),stage=$('stage'),canvas=$('canvas'),ctx=canvas.getContext('2d',{willReadFrequently:true});
 const KEY='liquid-lens-reports-v2',roles=['reference','sample'];
+const WORKSPACE_KEY='liquid-lens-workspace-v1';
+let workspace=createWorkspace();
+const activeProfile=()=>workspace.profiles.find(p=>p.id===workspace.activeId);
+function refreshRecords(){records=workspace.records.filter(r=>r.profileId===workspace.activeId);}
+function persistWorkspace(next){localStorage.setItem(WORKSPACE_KEY,JSON.stringify(next));workspace=next;refreshRecords();}
 let mode='none',stream=null,imageURL=null,selected='reference',busy=false,generation=0,torch=false,lastReport=null,regions=defaults(),records=[],storageError=false;
 let demoAnimation=null,demoElapsed=0,demoStarted=0,demoPaused=false,demoScenario='stable';
 const reducedMotion=matchMedia('(prefers-reduced-motion: reduce)');
@@ -19,10 +25,11 @@ function button(text,fn,cls){const b=node('button',text,cls);b.onclick=fn;return
 function ready(){return mode==='demo'||(mode!=='none'&&all('.condition').every(c=>c.checked)&&$('refName').value.trim()&&$('sampleName').value.trim());}
 function controls(){
  $('analyze').disabled=busy||!ready();$('start').disabled=busy;$('upload').disabled=busy;document.querySelector('.upload').setAttribute('aria-disabled',String(busy));
- $('stop').disabled=mode==='none'&&!busy;
+ $('stop').disabled=(mode==='none'||mode==='demo')&&!busy;$('stop').textContent=busy?'İptal et':'Animasyona dön';
  $('torch').disabled=busy||!stream?.getVideoTracks()[0]?.getCapabilities?.().torch;
  all('.placement button,.roi,.setup input,.setup select,.setup textarea').forEach(e=>e.disabled=busy);
- $('demo').disabled=busy;
+ all('.tab,#profileShortcut,#profileForm button,#profileForm input,#profileForm select,#newProfileForm input,#newProfileForm button,#profileList button').forEach(e=>e.disabled=busy);
+ $('deleteProfile').disabled=busy||workspace.profiles.length===1;all('#profileList .selected button').forEach(e=>e.disabled=true);
  all('#demoPanel button,#demoPanel select').forEach(e=>e.disabled=busy);
 }
 function stopCamera(){stream?.getTracks().forEach(t=>t.stop());stream=null;video.srcObject=null;torch=false;$('torch').textContent='Fener';}
@@ -73,7 +80,8 @@ $('start').onclick=async()=>{
  }catch(e){if(ticket!==generation)return;clearSource();setMode('none');say(e.name==='NotAllowedError'?'Kamera izni verilmedi. Tarayıcı izinlerini kontrol edin veya fotoğraf yükleyin.':e.name==='NotFoundError'?'Kamera bulunamadı. Fotoğraf yükleyebilirsiniz.':e.message);}
  finally{if(ticket===generation){busy=false;controls();liveQuality();}}
 };
-$('stop').onclick=()=>{generation++;busy=false;clearSource();setMode('none');$('progress').hidden=true;liveQuality();say('Kaynak kapatıldı. Kaydedilmiş raporlar Kayıtlar bölümünde kalır.');};
+function suspendSource(){generation++;busy=false;clearSource();setMode('none');$('progress').hidden=true;}
+$('stop').onclick=()=>{suspendSource();if(!$('view-measure').hidden)startDemo();};
 $('torch').onclick=async()=>{if(!stream||busy)return;try{const next=!torch;await stream.getVideoTracks()[0].applyConstraints({advanced:[{torch:next}]});torch=next;$('torch').textContent=next?'Feneri kapat':'Fener';invalidate();say('Fener yansıması ölçüm alanına düşmemeli; iki kap eşit aydınlanmalı.');}catch{say('Bu cihazda fener kontrolü kullanılamıyor.');}};
 document.querySelector('.upload').onkeydown=e=>{if((e.key==='Enter'||e.key===' ')&&!busy){e.preventDefault();$('upload').click();}};
 $('upload').onchange=async e=>{
@@ -84,9 +92,9 @@ $('upload').onchange=async e=>{
  catch{if(ticket===generation){clearSource();setMode('none');say('Fotoğraf okunamadı. JPEG, PNG veya WebP deneyin.');}}
  finally{if(ticket===generation){busy=false;controls();liveQuality();}}
 };
-$('demo').onclick=()=>{
+function startDemo(){
  generation++;clearSource();regions=defaults();demoScenario=$('demoScenario').value;demoPaused=reducedMotion.matches;$('demoPause').textContent=demoPaused?'▶ Devam et':'Ⅱ Duraklat';$('demoPause').setAttribute('aria-pressed',String(demoPaused));setMode('demo');restartDemo();updateDemoExpected();say('Animasyonlu demo sentetik veridir. Hazırlık onayları gerekmez. Test için karşılaştırmayı başlatın; gerçek numune kaydı oluşturulmaz.');
-};
+}
 $('demoScenario').onchange=()=>{demoScenario=$('demoScenario').value;updateDemoExpected();restartDemo();say('Test senaryosu değişti. Karşılaştırmayı başlatarak beklenen davranışı deneyin.');};
 $('demoPause').onclick=()=>setDemoPaused(!demoPaused);
 $('demoRestart').onclick=restartDemo;
@@ -108,7 +116,7 @@ $('analyze').onclick=async()=>{
   for(let i=0;i<count;i++){if(sourceMode==='camera')await nextFrame();else if(sourceMode==='demo'&&count>1)await new Promise(resolve=>setTimeout(resolve,180));if(ticket!==generation)return;frames.push(capture());$('progress').value=i+1;}
   const report=summarize(frames);
   if(report.issues.length){say('Ölçüm kaydedilmedi. '+report.issues.join(' '));return;}
-  Object.assign(report,{id:crypto.randomUUID(),createdAt:new Date().toISOString(),oilType:$('oilType').value,referenceName:$('refName').value.trim()||'Demo referans',sampleName:$('sampleName').value.trim()||'Demo numune',notes:$('notes').value.trim(),source:sourceMode,demo:sourceMode==='demo',...(sourceMode==='demo'?{demoScenario,demoPaused}:{}),regions:structuredClone(regions),conditions:all('.condition').map(c=>c.checked)});
+  Object.assign(report,{id:crypto.randomUUID(),createdAt:new Date().toISOString(),profileId:workspace.activeId,profileName:activeProfile().name,oilType:$('oilType').value,referenceName:$('refName').value.trim()||'Demo referans',sampleName:$('sampleName').value.trim()||'Demo numune',notes:$('notes').value.trim(),source:sourceMode,demo:sourceMode==='demo',...(sourceMode==='demo'?{demoScenario,demoPaused}:{}),regions:structuredClone(regions),conditions:all('.condition').map(c=>c.checked)});
   renderReport(report);say(sourceMode==='demo'?'Demo raporu hazır. Gerçek ölçüm değildir ve kayıtlara eklenemez.':'Karşılaştırma hazır. Raporu inceleyip cihazınıza kaydedebilirsiniz.');$('result').scrollIntoView({behavior:'smooth',block:'start'});
  }catch(e){if(ticket===generation)say(e.message);}
  finally{if(ticket===generation){stage.classList.remove('measuring');busy=false;$('progress').hidden=true;controls();liveQuality();}}
@@ -125,24 +133,36 @@ function renderReport(r){
  const chart=node('div',undefined,'channel-chart');chart.append(node('h3','Kanal farkları · Numune − Referans'));r.channels.forEach((delta,i)=>{const row=node('div',undefined,'channel-row'),track=node('div',undefined,'channel-track'),dot=node('span',undefined,'channel-dot');dot.style.left=(50+delta/255*50)+'%';track.append(dot);row.append(node('span',['R','G','B'][i]),track,node('span',(delta>0?'+':'')+number(delta)));chart.append(row);});chart.append(node('p','Ortadaki çizgi sıfır farktır. Sol: numunede daha düşük, sağ: daha yüksek kanal değeri.','hint'));result.append(chart);
  result.append(node('p','Bu değerler iki alanın kamera renkleri arasındaki farkı gösterir. Düşük fark orijinallik kanıtı değildir; yüksek fark da karışım kanıtı değildir. Işık, kap ve doğal renk farklılıkları sonucu etkileyebilir.'));
  if(r.notes)result.append(node('p','Not: '+r.notes));
+ result.append(node('p','Profil: '+(r.profileName||activeProfile().name),'hint'));
  const details=node('details'),summary=node('summary','Çekim kontrolü ve yöntem');details.append(summary,node('p',`Seri içi en büyük bölge sapması: ${number(r.drift)}. Yöntem: ${r.method}. Fiziksel kalibrasyon yapılmamıştır. Pratik eşikler laboratuvar doğrulamasından geçmemiştir.`));result.append(details);
  const actions=node('div',undefined,'actions'),save=button(records.some(x=>x.id===r.id)?'Kaydedildi':'Cihaza kaydet',()=>{if(saveRecord(r)){save.textContent='Kaydedildi';save.disabled=true;}});save.disabled=r.demo||records.some(x=>x.id===r.id);actions.append(save,button('JSON indir',()=>downloadJSON(r)),button('CSV indir',()=>downloadCSV([r])),button('Yazdır / PDF',()=>window.print()));result.append(actions);
 }
 function validReport(r){return r&&['paired-rgb-v2',METHOD].includes(r.method)&&typeof r.id==='string'&&typeof r.referenceName==='string'&&typeof r.sampleName==='string'&&typeof r.oilType==='string'&&typeof r.notes==='string'&&!r.demo&&Number.isFinite(Date.parse(r.createdAt))&&['distance','brightness','range','drift','frames'].every(k=>Number.isFinite(r[k]))&&roles.every(role=>r[role]&&['r','g','b','brightness','clipped','spread'].every(k=>Number.isFinite(r[role][k])))&&Array.isArray(r.channels)&&r.channels.length===3&&r.channels.every(Number.isFinite);}
-try{const parsed=JSON.parse(localStorage.getItem(KEY)||'[]');records=Array.isArray(parsed)?parsed.filter(validReport).slice(0,30):[];}catch{storageError=true;}
-function saveRecord(r){if(r.demo)return false;if(records.some(x=>x.id===r.id))return true;const next=[r,...records].slice(0,30);try{localStorage.setItem(KEY,JSON.stringify(next));records=next;renderHistory();say('Rapor bu tarayıcıya kaydedildi. Fotoğraf saklanmadı.');return true;}catch{say('Tarayıcıya kayıt yapılamadı. JSON veya CSV indirerek raporu saklayın.');return false;}}
+try{const saved=localStorage.getItem(WORKSPACE_KEY);if(saved)workspace=normalizeWorkspace(JSON.parse(saved),validReport);else{const legacy=JSON.parse(localStorage.getItem(KEY)||'[]');workspace=createWorkspace(Array.isArray(legacy)?legacy.filter(validReport):[]);persistWorkspace(workspace);}refreshRecords();}catch{storageError=true;refreshRecords();}
+function saveRecord(r){if(r.demo)return false;if(records.some(x=>x.id===r.id))return true;try{persistWorkspace(withReport(workspace,r));renderHistory();renderProfiles();say('Rapor seçili profile kaydedildi. Fotoğraf saklanmadı.');return true;}catch{say('Tarayıcıya kayıt yapılamadı. JSON veya CSV indirerek raporu saklayın.');return false;}}
 function renderHistory(){
+ $('historyOwner').textContent=activeProfile().name+' · Son 30 rapor bu profilde, bu tarayıcıda saklanır. Fotoğraf saklanmaz.';
  $('historyCount').textContent=records.length;const list=$('historyList');list.replaceChildren();$('exportAll').disabled=!records.length;$('clearHistory').disabled=!records.length;
  if(!records.length)list.append(node('div',storageError?'Tarayıcı kayıtlarına erişilemiyor. Ölçüm raporlarını dosya olarak indirebilirsiniz.':'Henüz kayıt yok. Ölçüm yaptıktan sonra “Cihaza kaydet” düğmesini kullanın.','empty'));
- for(const r of records){const item=node('article',undefined,'card history-item'),info=node('div');info.append(node('h3',`${r.referenceName} ↔ ${r.sampleName}`),node('p',`${date(r.createdAt)} · ${r.oilType} · RGB farkı ${number(r.distance)}`));const actions=node('div',undefined,'actions');actions.append(button('Raporu aç',()=>{showView('measure');renderReport(r);$('result').scrollIntoView({behavior:'smooth'});}),button('JSON',()=>downloadJSON(r)),button('Sil',()=>{if(!confirm('Bu rapor silinsin mi?'))return;try{const next=records.filter(x=>x.id!==r.id);localStorage.setItem(KEY,JSON.stringify(next));records=next;renderHistory();if(lastReport?.id===r.id)renderReport(lastReport);}catch{alert('Kayıt silinemedi. Tarayıcı depolama izinlerini kontrol edin.');}},'danger'));item.append(info,actions);list.append(item);}
+ for(const r of records){const item=node('article',undefined,'card history-item'),info=node('div');info.append(node('h3',`${r.referenceName} ↔ ${r.sampleName}`),node('p',`${date(r.createdAt)} · ${r.oilType} · RGB farkı ${number(r.distance)}`));const actions=node('div',undefined,'actions');actions.append(button('Raporu aç',()=>{showView('measure');renderReport(r);$('result').scrollIntoView({behavior:'smooth'});}),button('JSON',()=>downloadJSON(r)),button('Sil',()=>{if(!confirm('Bu rapor silinsin mi?'))return;try{persistWorkspace({...workspace,records:workspace.records.filter(x=>x.id!==r.id)});renderHistory();renderProfiles();if(lastReport?.id===r.id)renderReport(lastReport);}catch{alert('Kayıt silinemedi. Tarayıcı depolama izinlerini kontrol edin.');}},'danger'));item.append(info,actions);list.append(item);}
 }
 function download(name,content,type){const url=URL.createObjectURL(new Blob([content],{type})),a=node('a');a.href=url;a.download=name;document.body.append(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),10000);}
 function downloadJSON(r){download(`liquid-lens-${r.id}.json`,JSON.stringify({...r,interpretation:'Görsel karşılaştırma. Saflık, güvenlik veya karışım oranı belirlenemez.'},null,2),'application/json');}
-function downloadCSV(rows){const headers=['Tarih','Yağ türü','Referans','Numune','Kaynak','Demo','Kare sayısı','RGB farkı','Parlaklık farkı','Seri aralığı','R farkı','G farkı','B farkı','Notlar','Yöntem','Sınır'];const quote=v=>'"'+(typeof v==='string'&&/^[\s]*[=+@-]/.test(v)?"'"+v:String(v)).replaceAll('"','""')+'"';const data=rows.map(r=>[r.createdAt,r.oilType,r.referenceName,r.sampleName,r.source,r.demo,r.frames,r.distance,r.brightness,r.range,...r.channels,r.notes,r.method,'Saflık ve karışım oranı belirlenemez']);download('liquid-lens-rapor.csv','\uFEFF'+[headers,...data].map(row=>row.map(quote).join(',')).join('\r\n'),'text/csv;charset=utf-8');}
+function downloadCSV(rows){const headers=['Profil','Tarih','Yağ türü','Referans','Numune','Kaynak','Demo','Kare sayısı','RGB farkı','Parlaklık farkı','Seri aralığı','R farkı','G farkı','B farkı','Notlar','Yöntem','Sınır'];const quote=v=>'"'+(typeof v==='string'&&/^[\s]*[=+@-]/.test(v)?"'"+v:String(v)).replaceAll('"','""')+'"';const data=rows.map(r=>[r.profileName||activeProfile().name,r.createdAt,r.oilType,r.referenceName,r.sampleName,r.source,r.demo,r.frames,r.distance,r.brightness,r.range,...r.channels,r.notes,r.method,'Saflık ve karışım oranı belirlenemez']);download('liquid-lens-rapor.csv','\uFEFF'+[headers,...data].map(row=>row.map(quote).join(',')).join('\r\n'),'text/csv;charset=utf-8');}
 $('exportAll').onclick=()=>downloadCSV(records);
-$('clearHistory').onclick=()=>{if(!confirm('Bu tarayıcıdaki tüm ölçüm raporları silinsin mi?'))return;try{localStorage.removeItem(KEY);records=[];renderHistory();invalidate();}catch{alert('Kayıtlar temizlenemedi.');}};
-function showView(view){all('.view').forEach(e=>e.hidden=e.id!=='view-'+view);all('.tab').forEach(b=>{const active=b.dataset.view===view;b.classList.toggle('active',active);if(active)b.setAttribute('aria-current','page');else b.removeAttribute('aria-current');});if(view!=='measure'&&(mode==='camera'||mode==='demo'))$('stop').click();if(view==='history')renderHistory();}
+$('clearHistory').onclick=()=>{if(!confirm(activeProfile().name+' profilindeki tüm ölçüm raporları silinsin mi?'))return;try{persistWorkspace({...workspace,records:workspace.records.filter(r=>r.profileId!==workspace.activeId)});renderHistory();renderProfiles();invalidate();}catch{alert('Kayıtlar temizlenemedi.');}};
+function showView(view){if(view!=='measure'&&(mode!=='none'||busy))suspendSource();all('.view').forEach(e=>e.hidden=e.id!=='view-'+view);all('.tab').forEach(b=>{const active=b.dataset.view===view;b.classList.toggle('active',active);if(active)b.setAttribute('aria-current','page');else b.removeAttribute('aria-current');});if(view==='history')renderHistory();if(view==='profile')renderProfiles();if(view==='measure'&&mode==='none')startDemo();}
 all('.tab').forEach(b=>b.onclick=()=>{if(busy)return;showView(b.dataset.view);});
-document.addEventListener('visibilitychange',()=>{if(document.hidden&&(stream||busy)){$('stop').click();say('Sayfa arka plana geçtiği için çekim durduruldu. Yeniden açabilirsiniz.');}else if(document.hidden&&mode==='demo')setDemoPaused(true);});
+document.addEventListener('visibilitychange',()=>{if(document.hidden&&(stream||busy)){suspendSource();say('Sayfa arka plana geçtiği için çekim durduruldu.');}else if(document.hidden&&mode==='demo')setDemoPaused(true);else if(!document.hidden&&mode==='none'&&!$('view-measure').hidden)startDemo();});
 window.addEventListener('pagehide',()=>{generation++;stopCamera();stopDemo();if(imageURL)URL.revokeObjectURL(imageURL);});
-drawRegions();renderHistory();controls();
+function renderProfiles(){
+ const p=activeProfile();$('profileShortcutName').textContent=p.name;$('profileAvatar').textContent=p.name.slice(0,1).toLocaleUpperCase('tr-TR');$('profileName').value=p.name;$('profileOrganization').value=p.organization;$('profileOil').value=p.oilType;$('profileScenario').value=p.scenario;$('profileRecordCount').textContent=records.length;$('deleteProfile').disabled=workspace.profiles.length===1||busy;
+ const list=$('profileList');list.replaceChildren();for(const profile of workspace.profiles){const row=node('div',undefined,'profile-row'+(profile.id===p.id?' selected':'')),info=node('div');info.append(node('b',profile.name),node('small',`${profile.organization||'Yerel profil'} · ${workspace.records.filter(r=>r.profileId===profile.id).length} kayıt`));const choose=button(profile.id===p.id?'Seçili':'Profile geç',()=>{try{persistWorkspace({...workspace,activeId:profile.id});applyProfile();$('profileMessage').textContent=profile.name+' profiline geçildi.';}catch{$('profileMessage').textContent='Profil değişikliği kaydedilemedi.';}});choose.disabled=profile.id===p.id||busy;row.append(info,choose);list.append(row);}
+ if(storageError)$('profileMessage').textContent='Tarayıcı depolamasına erişilemedi. Değişiklikler kaydedilemeyebilir.';
+}
+function applyProfile(){suspendSource();const p=activeProfile();$('oilType').value=p.oilType;$('demoScenario').value=p.scenario;$('refName').value='';$('sampleName').value='';$('notes').value='';all('.condition').forEach(c=>c.checked=false);renderHistory();renderProfiles();if(!$('view-measure').hidden)startDemo();}
+$('profileShortcut').onclick=()=>showView('profile');
+$('newProfileForm').onsubmit=e=>{e.preventDefault();try{persistWorkspace(addProfile(workspace,{name:$('newProfileName').value},crypto.randomUUID()));$('newProfileName').value='';applyProfile();$('profileMessage').textContent='Yeni profil oluşturuldu ve seçildi.';}catch(error){$('profileMessage').textContent=error.message;}};
+$('profileForm').onsubmit=e=>{e.preventDefault();try{persistWorkspace(updateProfile(workspace,workspace.activeId,{name:$('profileName').value,organization:$('profileOrganization').value,oilType:$('profileOil').value,scenario:$('profileScenario').value}));applyProfile();$('profileMessage').textContent='Profil ve varsayılan tercihler kaydedildi.';}catch(error){$('profileMessage').textContent=error.message;}};
+$('deleteProfile').onclick=()=>{if(!confirm(activeProfile().name+' profili ve bu profile ait '+records.length+' rapor silinsin mi?'))return;try{persistWorkspace(removeProfile(workspace,workspace.activeId));applyProfile();$('profileMessage').textContent='Profil silindi.';}catch(error){$('profileMessage').textContent=error.message;}};
+drawRegions();applyProfile();controls();

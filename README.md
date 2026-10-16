@@ -20,7 +20,13 @@ Node 22 ve üzeri gerekir. Harici çalışma zamanı bağımlılığı yoktur. S
 5. Ölçümü başlatın. Uygun olmayan çekimlerde verilen düzeltme önerilerini uygulayın.
 6. Sonucu cihazınıza kaydedin; JSON, CSV veya tarayıcının yazdır/PDF seçeneğiyle dışa aktarın.
 
-Demo, sentetik animasyonlar kullanır ve açıkça etiketlenir. “Animasyonlu testleri aç” ile sabit numune, değişen renk, dalgalanan ışık ve hareketli parlama senaryolarını deneyebilirsiniz. Hazırlık onayları demo için gerekmez. Çalışan animasyondan 180 ms aralıkla 8 kare alınır; duraklatılmış animasyon tek kare olarak ölçülür. Hareket azaltma tercihi açıkken demo duraklatılmış başlar. Senaryoların beklenen davranışı ekranda açıklanır. Demo raporları normal kayıt defterine eklenmez. Gerçek kameranın veya kimyasal bir analizin doğrulaması olarak kullanılamaz.
+Animasyonlu görünüm açılışta otomatik gösterilir. Kamera veya fotoğraftan “Animasyona dön” ile bu görünüme dönülür. Demo sentetiktir ve açıkça etiketlenir; sabit numune, değişen renk, dalgalanan ışık ve hareketli parlama senaryoları vardır. Hazırlık onayları demo için gerekmez. Çalışan animasyondan 180 ms aralıkla 8 kare alınır; duraklatılmış animasyon tek kare olarak ölçülür. Hareket azaltma tercihi açıkken demo duraklatılmış başlar. Demo raporları profile kaydedilmez; gerçek kamera veya kimyasal analiz doğrulaması olarak kullanılamaz.
+
+## Yerel profiller
+
+Profiller sekmesinden ad, isteğe bağlı kurum, varsayılan yağ türü ve açılış animasyonu düzenlenebilir. En fazla 12 profil oluşturulur; her profil kendi son 30 raporunu tutar. Profil seçimi ve tercihler sayfa yenilendiğinde korunur. Raporlara profil kimliği ve ölçüm anındaki profil adı eklenir; JSON ve CSV dışa aktarımlarında da bulunur. Kayıtları temizlemek sadece seçili profili etkiler. Profil silme, onaydan sonra o profile ait raporları siler; son profil silinemez.
+
+Eski `liquid-lens-reports-v2` kayıtları ilk açılışta “Kişisel profil”e taşınır. Profil ve raporlar `liquid-lens-workspace-v1` altında tek bir tarayıcı kaydıyla saklanır. Eski kayıt anahtarı geçişte silinmez. Bunlar yerel çalışma alanlarıdır: kimlik doğrulama, parola veya bulut eşitleme yoktur. Aynı tarayıcıyı kullanan herkes profilleri açabilir. Tarayıcı verilerini temizlemek kayıtları siler; JSON/CSV dosyalarını ayrıca saklayın.
 
 ## Yöntem
 
@@ -38,7 +44,7 @@ Yağların saflık ve kalite analizi hakkında: [Uluslararası Zeytin Konseyi](h
 
 ## Veriler
 
-Fotoğraflar yerel bellekte işlenir; sunucuya gönderilmez ve kayıtlara eklenmez. En fazla 30 rapor, kullanıcı “Cihaza kaydet” seçerse tarayıcının `localStorage` alanında saklanır. Tarayıcı verilerini temizlemek kayıtları siler. Harici yazı tipi, analiz servisi veya üçüncü taraf istemci bağımlılığı yoktur. Sunucu yalnızca `dist` dosyalarını sunar. İndirilen raporlar kullanıcı tarafından paylaşılabilir.
+Fotoğraflar yerel bellekte işlenir; sunucuya gönderilmez ve kayıtlara eklenmez. Her profil için en fazla 30 rapor, kullanıcı “Cihaza kaydet” seçerse tarayıcının `localStorage` alanında saklanır. Tarayıcı verilerini temizlemek kayıtları siler. Harici yazı tipi, analiz servisi veya üçüncü taraf istemci bağımlılığı yoktur. Sunucu yalnızca `dist` dosyalarını sunar. İndirilen raporlar kullanıcı tarafından paylaşılabilir.
 
 ## Kontroller
 
