@@ -22,6 +22,10 @@ Node 22 ve üzeri gerekir. Harici çalışma zamanı bağımlılığı yoktur. S
 
 Animasyonlu görünüm açılışta otomatik gösterilir. Kamera veya fotoğraftan “Animasyona dön” ile bu görünüme dönülür. Demo sentetiktir ve açıkça etiketlenir; sabit numune, değişen renk, dalgalanan ışık ve hareketli parlama senaryoları vardır. Hazırlık onayları demo için gerekmez. Çalışan animasyondan 180 ms aralıkla 8 kare alınır; duraklatılmış animasyon tek kare olarak ölçülür. Hareket azaltma tercihi açıkken demo duraklatılmış başlar. Demo raporları profile kaydedilmez; gerçek kamera veya kimyasal analiz doğrulaması olarak kullanılamaz.
 
+## Kolay çekim araçları
+
+“Alan öner” düğmesi, görüntünün sol ve sağ yarısında renkli ve homojen dikdörtgenler önerir. Yağ, sıvı veya kap tanıma modeli değildir; renkli arka planlar da önerilebilir. Kullanıcı kutuları gözle doğrulamalıdır. Uygun iki alan bulunamazsa mevcut kutular korunur. Kutu boyutu elle değiştirilebilir. Canlı parlaklık göstergeleri, hazırlık yönlendirmesi ve hızlı adlandırma gerçek çekimi kolaylaştırır. Beyaz kontrol bölgesi kullanılmaz.
+
 ## Yerel profiller
 
 Profiller sekmesinden ad, isteğe bağlı kurum, varsayılan yağ türü ve açılış animasyonu düzenlenebilir. En fazla 12 profil oluşturulur; her profil kendi son 30 raporunu tutar. Profil seçimi ve tercihler sayfa yenilendiğinde korunur. Raporlara profil kimliği ve ölçüm anındaki profil adı eklenir; JSON ve CSV dışa aktarımlarında da bulunur. Kayıtları temizlemek sadece seçili profili etkiler. Profil silme, onaydan sonra o profile ait raporları siler; son profil silinemez.

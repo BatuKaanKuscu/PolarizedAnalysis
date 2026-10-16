@@ -13,6 +13,7 @@ try{
  const page=await context.newPage(),errors=[];page.on('pageerror',e=>errors.push(e.message));
  await page.goto(`http://127.0.0.1:${port}`);
  assert.equal(await page.locator('#analyze').isDisabled(),false);assert.equal(await page.locator('#demo').count(),0);assert.equal(await page.locator('#demoPanel').isVisible(),true);
+ await page.locator('#suggest').click();assert.ok((await page.locator('#message').textContent()).includes('Alan önerisi yerleştirildi'));assert.equal(await page.locator('#regionSize').inputValue(),'suggested');await page.locator('#regionSize').selectOption('small');await page.locator('#positions').click();assert.equal(await page.locator('#regionSize').inputValue(),'medium');assert.ok((await page.locator('#readiness').textContent()).includes('Animasyon hazır'));
  await page.locator('#refName').fill('Parti A');await page.locator('#sampleName').fill('Parti B');
  for(const c of await page.locator('.condition').all())await c.check();
  await page.locator('#analyze').click();await page.locator('#result').waitFor({state:'visible'});

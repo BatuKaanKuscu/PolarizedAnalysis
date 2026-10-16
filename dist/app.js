@@ -1,6 +1,7 @@
 import {measure,quality,summarize,cropRect,overlap,METHOD} from './analysis.mjs';
 import {drawDemo,scenarios} from './demo.mjs';
 import {createWorkspace,normalizeWorkspace,addProfile,updateProfile,removeProfile,withReport} from './workspace.mjs';
+import {suggestRegions} from './locate.mjs';
 const $=id=>document.getElementById(id),all=s=>[...document.querySelectorAll(s)],video=$('video'),stage=$('stage'),canvas=$('canvas'),ctx=canvas.getContext('2d',{willReadFrequently:true});
 const KEY='liquid-lens-reports-v2',roles=['reference','sample'];
 const WORKSPACE_KEY='liquid-lens-workspace-v1';
@@ -31,6 +32,12 @@ function controls(){
  all('.tab,#profileShortcut,#profileForm button,#profileForm input,#profileForm select,#newProfileForm input,#newProfileForm button,#profileList button').forEach(e=>e.disabled=busy);
  $('deleteProfile').disabled=busy||workspace.profiles.length===1;all('#profileList .selected button').forEach(e=>e.disabled=true);
  all('#demoPanel button,#demoPanel select').forEach(e=>e.disabled=busy);
+ all('#assistPanel button,#assistPanel select').forEach(e=>e.disabled=busy||mode==='none');updateReadiness();
+}
+function updateReadiness(){
+ const missing=[];if(mode==='none')missing.push('Kamera veya fotoğraf açın.');if(mode!=='demo'){if(!$('refName').value.trim()||!$('sampleName').value.trim())missing.push('Referans ve numuneye ad verin.');if(!all('.condition').every(c=>c.checked))missing.push('Hazırlık onaylarını tamamlayın.');}
+ $('readiness').textContent=busy?'Ölçüm sürüyor; görüntüyü sabit tutun.':missing.length?missing.join(' '):mode==='demo'?'Animasyon hazır. Doğrudan karşılaştırmayı başlatabilirsiniz.':'Hazırlık tamam. Kutuları kontrol edip karşılaştırmayı başlatın.';
+ all('.flow-step').forEach((e,i)=>e.classList.toggle('complete',i===0?mode!=='none':i===1?!!ready():!$('result').hidden));
 }
 function stopCamera(){stream?.getTracks().forEach(t=>t.stop());stream=null;video.srcObject=null;torch=false;$('torch').textContent='Fener';}
 function clearSource(){stopCamera();stopDemo();stage.classList.remove('measuring');if(imageURL)URL.revokeObjectURL(imageURL);imageURL=null;$('photo').removeAttribute('src');}
@@ -48,7 +55,14 @@ all('.roi').forEach(b=>{
  b.onpointerup=()=>drag=null;b.onpointercancel=()=>drag=null;
  b.onkeydown=e=>{if(!['ArrowLeft','ArrowRight','ArrowUp','ArrowDown'].includes(e.key)||busy)return;e.preventDefault();const r=regions[b.dataset.role];move(b.dataset.role,r.x+r.w/2+(e.key==='ArrowLeft'?-.01:e.key==='ArrowRight'?.01:0),r.y+r.h/2+(e.key==='ArrowUp'?-.01:e.key==='ArrowDown'?.01:0));};
 });
-$('positions').onclick=()=>{regions=defaults();drawRegions();invalidate();liveQuality();};
+$('positions').onclick=()=>{regions=defaults();$('regionSize').value='medium';drawRegions();invalidate();liveQuality();};
+$('focusSetup').onclick=()=>{$('refName').scrollIntoView({behavior:'smooth',block:'center'});$('refName').focus({preventScroll:true});};
+$('quickNames').onclick=()=>{if(!$('refName').value.trim())$('refName').value='Referans 01';if(!$('sampleName').value.trim())$('sampleName').value='Numune 01';invalidate();controls();};
+$('regionSize').onchange=()=>{const [w,h]={small:[.14,.18],medium:[.22,.26],large:[.28,.32]}[$('regionSize').value];for(const role of roles){const r=regions[role],cx=r.x+r.w/2,cy=r.y+r.h/2;regions[role]={x:Math.max(0,Math.min(1-w,cx-w/2)),y:Math.max(.07,Math.min(1-h,cy-h/2)),w,h};}invalidate();drawRegions();liveQuality();};
+$('suggest').onclick=()=>{
+ if(busy||mode==='none')return;
+ try{if(mode==='demo')paintDemo();const source=mode==='camera'?video:mode==='photo'?$('photo'):$('demoCanvas'),w=source.videoWidth||source.naturalWidth||source.width,h=source.videoHeight||source.naturalHeight||source.height,box=stage.getBoundingClientRect();if(!w||!h)throw new Error('Görüntü henüz hazır değil.');const c=document.createElement('canvas');c.width=120;c.height=90;const d=c.getContext('2d'),r=cropRect({x:0,y:0,w:1,h:1},w,h,box.width,box.height);d.drawImage(source,r.x,r.y,r.width,r.height,0,0,c.width,c.height);const suggestion=suggestRegions(d.getImageData(0,0,c.width,c.height).data,c.width,c.height);if(!suggestion){say('İki uygun renkli alan önerilemedi. Kapları yan yana getirin veya kutuları elle taşıyın.');return;}regions=suggestion;$('regionSize').value='suggested';drawRegions();invalidate();liveQuality();say('Alan önerisi yerleştirildi. Kutuların yağ içinde olduğunu gözle kontrol edin; bu işlem yağ türünü tanımaz.');}catch(error){say(error.message);}
+};
 function geometryIssues(){for(let i=0;i<roles.length;i++)for(let j=i+1;j<roles.length;j++)if(overlap(regions[roles[i]],regions[roles[j]]))return ['Ölçüm kutuları örtüşüyor. Alanları birbirinden ayırın.'];return [];}
 function capture(){
  if(mode==='demo')paintDemo();
@@ -63,8 +77,9 @@ function liveQuality(){
  if(busy)return;
  let issues=[];
  if(mode==='none'){$('qualityText').textContent='Kamera veya fotoğraf açıldığında ışık kontrolü burada görünür.';$('qualityIndicator').textContent='○';document.querySelector('.quality-strip').classList.remove('bad');return;}
- try{issues=[...geometryIssues(),...quality(capture())];}catch{issues=['Görüntü hazırlanıyor…'];}
+ try{const frame=capture();issues=[...geometryIssues(),...quality(frame)];for(const role of roles){const s=frame[role];$('live-'+role).textContent='Parlaklık '+Math.round(s.brightness)+' / 255';$('color-'+role).style.background=`rgb(${s.r},${s.g},${s.b})`;}}catch{issues=['Görüntü hazırlanıyor…'];}
  $('qualityText').textContent=issues.length?issues.join(' '):'Işık ön kontrolü uygun görünüyor. Bölge konumlarını gözle kontrol edin.';
+ updateReadiness();
  $('qualityIndicator').textContent=issues.length?'△':'✓';document.querySelector('.quality-strip').classList.toggle('bad',!!issues.length);
 }
 setInterval(liveQuality,900);
@@ -132,6 +147,7 @@ function renderReport(r){
  const metrics=node('div',undefined,'metrics');for(const [value,label,note]of [[r.distance,'RGB uzaklığı','0–441,7 · kamera birimi'],[r.brightness,'Parlaklık farkı','0–255 · kamera birimi'],[r.range,'Seri fark aralığı',r.frames>1?'Kareler arası RGB fark değişimi':'Tek karede değerlendirilemez']]){const m=node('div',undefined,'metric');m.append(node('b',label==='Seri fark aralığı'&&r.frames===1?'—':number(value)),node('span',label),node('small',note));metrics.append(m);}result.append(metrics);
  const chart=node('div',undefined,'channel-chart');chart.append(node('h3','Kanal farkları · Numune − Referans'));r.channels.forEach((delta,i)=>{const row=node('div',undefined,'channel-row'),track=node('div',undefined,'channel-track'),dot=node('span',undefined,'channel-dot');dot.style.left=(50+delta/255*50)+'%';track.append(dot);row.append(node('span',['R','G','B'][i]),track,node('span',(delta>0?'+':'')+number(delta)));chart.append(row);});chart.append(node('p','Ortadaki çizgi sıfır farktır. Sol: numunede daha düşük, sağ: daha yüksek kanal değeri.','hint'));result.append(chart);
  result.append(node('p','Bu değerler iki alanın kamera renkleri arasındaki farkı gösterir. Düşük fark orijinallik kanıtı değildir; yüksek fark da karışım kanıtı değildir. Işık, kap ve doğal renk farklılıkları sonucu etkileyebilir.'));
+ const next=node('div',undefined,'result-next');next.append(node('b','Şimdi ne yapmalıyım?'),node('p',r.demo?'Bu bir animasyon ölçümüdür. Gerçek karşılaştırma için kamerayı açın veya iki numuneyi birlikte gösteren fotoğraf yükleyin.':'Kutuların kap kenarı ve yansıma içermediğini kontrol edin. Aynı numuneleri tekrar ölçerek farkın tekrarlanıp tekrarlanmadığına bakın.'),button('Tekrar ölç',()=>{invalidate();stage.scrollIntoView({behavior:'smooth',block:'center'});controls();}));result.append(next);
  if(r.notes)result.append(node('p','Not: '+r.notes));
  result.append(node('p','Profil: '+(r.profileName||activeProfile().name),'hint'));
  const details=node('details'),summary=node('summary','Çekim kontrolü ve yöntem');details.append(summary,node('p',`Seri içi en büyük bölge sapması: ${number(r.drift)}. Yöntem: ${r.method}. Fiziksel kalibrasyon yapılmamıştır. Pratik eşikler laboratuvar doğrulamasından geçmemiştir.`));result.append(details);
