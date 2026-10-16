@@ -1,0 +1,23 @@
+<!doctype html>
+<html lang="tr">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="theme-color" content="#10251f">
+<title>Liquid Lens · Optik karşılaştırma</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header><a class="brand" href="#">◈ <span>LIQUID LENS</span></a><span class="tag">MOBİL OPTİK LAB</span></header>
+<main>
+<section class="intro"><span class="eyebrow">GÖRÜNENİN ÖTESİNE BAK</span><h1>Bir damla.<br>Biraz daha <em>bilgi.</em></h1><p>Telefonunla referans ve numunenin görünür özelliklerini karşılaştır. Ölçülebileni gör, belirsizliği bil.</p><div class="notice"><b>Sahtelik tespiti değildir.</b> Görsel benzerlik, saflığı veya güvenliği doğrulamaz. %100 doğruluk garantisi verilemez.</div></section>
+<section class="workspace">
+<div class="panel-heading"><div><span class="eyebrow">01 / ÖLÇÜM ALANI</span><h2>Optik karşılaştırma</h2></div><span class="status" id="cameraStatus">Kamera kapalı</span></div>
+<div class="camera"><video id="video" autoplay playsinline muted></video><div id="placeholder"><span class="lens">◎</span><h3>Numuneni ışığa getir.</h3><p>Şeffaf bir kap ve düz, beyaz bir arka plan kullan.</p></div><div class="reticle"></div><span class="camera-label">ORTADAKİ KARE ÖLÇÜLÜR</span></div>
+<div class="camera-actions"><button class="primary" id="start">Kamerayı aç <span>↗</span></button><button id="torch" disabled>Fener</button><label class="upload">Fotoğraf seç<input type="file" id="upload" accept="image/*"></label></div>
+<p id="message" role="status" aria-live="polite">Fotoğraflar cihazınızda işlenir; sunucuya yüklenmez.</p>
+<div class="steps"><button id="reference" disabled><span>1</span><div><b>Referansı kaydet</b><small>Doğrulanmış, orijinal numune</small></div><img id="refThumb" alt=""></button><button id="sample" disabled><span>2</span><div><b>Numuneyi karşılaştır</b><small>Aynı kap, ışık ve kamera konumu</small></div></button></div>
+<div class="result" id="result" hidden aria-live="polite"></div>
+<button id="reset" class="reset">Ölçümü sıfırla</button>
+</section>
+<section class="guide"><span class="eyebrow">DAHA TUTARLI BİR ÇEKİM İÇİN</span><div class="guide-grid"><article><span>01</span><h3>Işığı sabit tut</h3><p>Dağınık gün ışığı kullan. Parlama ve gölgeden kaçın.</p></article><article><span>02</span><h3>Koşulları eşitle</h3><p>Aynı kap, sıvı yüksekliği, mesafe ve beyaz arka planla çek.</p></article><article><span>03</span><h3>Sınırları bil</h3><p>Renk farkı bir ipucudur. Kimyasal bileşim için uygun laboratuvar analizi gerekir.</p></article></div></section>
+<footer><span>◈ LIQUID LENS</span><span>Görsel veri. Açık sınırlar.</span></footer>
+</main><canvas id="canvas" hidden></canvas><script type="module" src="app.js"></script></body></html>
