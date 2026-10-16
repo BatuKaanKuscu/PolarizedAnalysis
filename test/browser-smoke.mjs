@@ -1,0 +1,48 @@
+// Optional: PLAYWRIGHT_MODULE points to an installed playwright-core index.mjs.
+import assert from 'node:assert/strict';
+import {pathToFileURL} from 'node:url';
+import {spawn} from 'node:child_process';
+import {mkdir,readFile} from 'node:fs/promises';
+const {chromium}=await import(pathToFileURL(process.env.PLAYWRIGHT_MODULE).href);
+const server=spawn(process.execPath,['server.mjs'],{env:{...process.env,PORT:'0'},stdio:['ignore','pipe','inherit']});
+let browser;
+try{
+ const port=await new Promise((resolve,reject)=>{server.stdout.once('data',d=>resolve(String(d).match(/port (\d+)/)[1]));server.once('error',reject);});
+ browser=await chromium.launch({executablePath:process.env.BROWSER_EXECUTABLE||'C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe',headless:true,args:['--use-fake-device-for-media-stream','--use-fake-ui-for-media-stream']});
+ const context=await browser.newContext({viewport:{width:390,height:844},acceptDownloads:true});
+ const page=await context.newPage(),errors=[];page.on('pageerror',e=>errors.push(e.message));
+ await page.goto(`http://127.0.0.1:${port}`);
+ assert.equal(await page.locator('#analyze').isDisabled(),true);
+ await page.locator('#demo').click();await page.locator('#refName').fill('Parti A');await page.locator('#sampleName').fill('Parti B');
+ for(const c of await page.locator('.condition').all())await c.check();
+ await page.locator('#analyze').click();await page.locator('#result').waitFor({state:'visible'});
+ assert.ok(await page.locator('.demo-alert').isVisible());assert.ok(await page.getByRole('button',{name:'Cihaza kaydet',exact:true}).isDisabled());
+ assert.equal(await page.locator('.metric b').first().textContent(),'32,6');
+ const data=await page.locator('#demoCanvas').evaluate(c=>c.toDataURL('image/png').split(',')[1]);
+ await page.locator('#upload').setInputFiles({name:'paired.png',mimeType:'image/png',buffer:Buffer.from(data,'base64')});
+ await page.waitForFunction(()=>document.getElementById('cameraStatus').textContent==='Tek fotoğraf');
+ await page.locator('#analyze').click();await page.locator('#result').waitFor({state:'visible'});
+ assert.equal(await page.locator('.demo-alert').count(),0);
+ const download=page.waitForEvent('download');await page.getByRole('button',{name:'JSON indir',exact:true}).click();
+ const saved=await download,json=JSON.parse(await readFile(await saved.path(),'utf8'));assert.equal(json.source,'photo');assert.equal(json.frames,1);assert.equal(json.demo,false);assert.deepEqual(json.conditions,[true,true,true]);
+ await page.getByRole('button',{name:'Cihaza kaydet',exact:true}).click();assert.equal(await page.locator('#historyCount').textContent(),'1');
+ await page.locator('[data-view="history"]').click();assert.equal(await page.locator('.history-item').count(),1);
+ await page.reload();assert.equal(await page.locator('#historyCount').textContent(),'1');
+ await page.locator('[data-view="history"]').click();await page.getByRole('button',{name:'Raporu aç',exact:true}).click();await page.locator('#result').waitFor({state:'visible'});
+ await mkdir('test-results',{recursive:true});await page.screenshot({path:'test-results/mobile.png',fullPage:true});
+ assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),true);
+ await page.setViewportSize({width:1366,height:900});await page.screenshot({path:'test-results/desktop.png',fullPage:true});
+ await page.evaluate(()=>{navigator.mediaDevices.getUserMedia=async()=>{const c=document.createElement('canvas'),box=document.getElementById('stage').getBoundingClientRect();c.width=Math.round(box.width*2);c.height=Math.round(box.height*2);const d=c.getContext('2d');d.fillStyle='rgb(215,215,208)';d.fillRect(0,0,c.width,c.height);for(const [x,color]of [[.08,'rgb(163,156,66)'],[.57,'rgb(192,165,78)']]){d.fillStyle=color;d.fillRect(c.width*x,c.height*.3,c.width*.35,c.height*.6);}const stream=c.captureStream(0);let i=0;window.qaInterval=setInterval(()=>{d.fillStyle=i++%2?'#111':'#222';d.fillRect(0,0,2,2);stream.getVideoTracks()[0].requestFrame();},45);return stream;};});
+ await page.locator('#start').click();await page.waitForFunction(()=>document.getElementById('cameraStatus').textContent==='Canlı kamera');
+ await page.locator('#refName').fill('Kamera referansı');await page.locator('#sampleName').fill('Kamera numunesi');for(const c of await page.locator('.condition').all())await c.check();
+ await page.locator('#analyze').click();await page.waitForFunction(()=>document.getElementById('progress').hidden);assert.equal(await page.locator('#result').isVisible(),true,await page.locator('#message').textContent());assert.ok((await page.locator('#result').textContent()).includes('8 kare'));assert.ok((await page.locator('#result').textContent()).includes('Seri kontrolü geçti'));
+ assert.equal(await page.locator('#video').evaluate(v=>v.srcObject.getTracks()[0].readyState),'live');
+ await page.locator('[data-view="history"]').click();assert.equal(await page.locator('#video').evaluate(v=>v.srcObject),null);
+ await page.evaluate(()=>clearInterval(window.qaInterval));
+ await page.locator('[data-view="measure"]').click();await page.locator('#upload').setInputFiles({name:'paired.png',mimeType:'image/png',buffer:Buffer.from(data,'base64')});await page.waitForFunction(()=>document.getElementById('cameraStatus').textContent==='Tek fotoğraf');
+ const sampleBox=page.locator('.roi[data-role="sample"]');await sampleBox.focus();for(let i=0;i<35;i++)await sampleBox.press('ArrowLeft');await page.locator('#analyze').click();assert.ok((await page.locator('#message').textContent()).includes('örtüşüyor'));assert.equal(await page.locator('#result').isHidden(),true);
+ await page.locator('#positions').click();
+ const whiteImage=await page.evaluate(()=>{const c=document.createElement('canvas');c.width=800;c.height=500;const d=c.getContext('2d');d.fillStyle='#fff';d.fillRect(0,0,800,500);return c.toDataURL('image/png').split(',')[1];});
+ await page.locator('#upload').setInputFiles({name:'overexposed.png',mimeType:'image/png',buffer:Buffer.from(whiteImage,'base64')});await page.waitForFunction(()=>document.getElementById('cameraStatus').textContent==='Tek fotoğraf');await page.locator('#analyze').click();assert.ok((await page.locator('#message').textContent()).includes('Ölçüm kaydedilmedi'));assert.equal(await page.locator('#result').isHidden(),true);
+ assert.deepEqual(errors,[]);console.log('Browser checks passed: demo, photo, persistence, download, mobile width, eight-frame capture, camera lifecycle, overlapping regions and overexposure rejection.');
+}finally{await browser?.close();server.kill();}

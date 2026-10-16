@@ -1,18 +1,48 @@
-# Liquid Lens
+# Liquid Lens 2.0
 
-## Render Web Service
+Zeytinyağı ve diğer bitkisel yağlar için **aynı karede görsel karşılaştırma** aracı. Saflık, asitlik, güvenlik, kimyasal bileşim, yağ türü veya karışım oranı belirlemez. Sahtelik tespiti veya %100 doğruluk iddiası yoktur.
+
+## Render
 
 - Branch: `main`
-- Root Directory: boş bırakın.
+- Root Directory: boş
 - Build Command: `npm install --omit=dev`
 - Start Command: `npm start`
 
-Sunucu Render'ın `PORT` ortam değişkenini kullanır ve `0.0.0.0` üzerinde dinler. Harici Node bağımlılığı yoktur. Yerelde `npm start` ile başlatılabilir.
+Node 22 ve üzeri gerekir. Harici çalışma zamanı bağımlılığı yoktur. Sunucu `PORT` değişkenini kullanır ve `0.0.0.0` üzerinde dinler. Kamera için HTTPS veya localhost gerekir.
 
-Mobil tarayıcıda yerel kamera görüntüsü karşılaştırması. Kamera için HTTPS veya localhost gerekir. `dist` klasörünü statik sunucuyla servis edin. Görüntüler sunucuya gönderilmez. Arayüz yazı tipleri Google Fonts üzerinden yüklenir.
+## Kullanım
 
-Merkezdeki 180 CSS piksel genişliğindeki kare, görüntünün object-fit:cover ölçeğiyle eşleştirilir ve 128×128 piksele örneklenir. Ortalama RGB Öklid uzaklığı (0–441.67) ve ortalama parlaklık farkı (0–255) raporlanır. Bunlar kalibre edilmiş fiziksel ölçümler değildir. Işık eşikleri yalnızca kaba çekim kontrolleridir. Otomatik beyaz dengesi ve pozlama sonuçları etkiler. Netlik, sıvının doğal homojenliği yüzünden güvenilir biçimde değerlendirilmez.
+1. Yağ türünü, referans ve numune adlarını girin.
+2. Aynı tip şeffaf kaplarda eşit yükseklikteki iki yağı mat beyaz arka plan önünde yan yana yerleştirin. Hazırlık kutularını işaretleyin.
+3. Kamera açın veya iki kabı birlikte gösteren bir fotoğraf yükleyin.
+4. Referans ve numune kutularını yağın iç kısmına, beyaz kutuyu arka plana taşıyın. Önce bölge düğmesini seçip görüntüye dokunabilir, kutuları sürükleyebilir veya kutuya odaklanıp ok tuşlarını kullanabilirsiniz.
+5. Ölçümü başlatın. Uygun olmayan çekimlerde verilen düzeltme önerilerini uygulayın.
+6. Sonucu cihazınıza kaydedin; JSON, CSV veya tarayıcının yazdır/PDF seçeneğiyle dışa aktarın.
 
-Telefonla kimyasal içerik, alkol oranı, toksisite, polarizasyon veya sahtelik belirlenmez. Benzer görünüm farklı kimyasal içerikleri dışlamaz. %100 doğruluk iddiası veya sahtelik sınıflandırıcısı yoktur. Gerçek bir sınıflandırma sistemi, sıvıya özel doğrulanmış donanım, bağımsız laboratuvar etiketleri ve kör doğrulama verisi gerektirir.
+Demo, sentetik bir çizim kullanır ve açıkça etiketlenir. Demo raporları normal kayıt defterine eklenmez. Gerçek kameranın veya kimyasal bir analizin doğrulaması olarak kullanılamaz.
 
-Fiziksel telefonda kamera izni, arka kamera, fener ve dosya seçimi ayrıca doğrulanmalıdır.
+## Yöntem
+
+- Görüntünün `object-fit: cover` ile görünür olan kısmına karşılık gelen üç bölge 64×64 piksele örneklenir.
+- Ortalama R/G/B, aritmetik parlaklık `(R+G+B)/3`, kırpılan piksel oranı ve parlaklığın uzamsal standart sapması hesaplanır.
+- Kamerada 8 ayrı kare alınır; desteklenen tarayıcılarda video kare geri çağrısı kullanılır. Desteklemeyen tarayıcılarda 180 ms arayla örneklenir. Fotoğrafta yalnızca 1 kare vardır.
+- Her bölgenin ölçümlerinin ortancası raporlanır. RGB uzaklığı `sqrt(ΔR²+ΔG²+ΔB²)` (0–441,67), mutlak parlaklık farkı (0–255) ve işaretli kanal farkları gösterilir.
+- Beyaz bölge bir çekim ön kontrolüdür; beyaz dengesi düzeltmesi veya fiziksel kalibrasyon yapılmaz.
+- Bir numune alanının parlaklığı 25 altında veya 235 üstündeyse; herhangi bir kanalı ≤3 veya ≥252 olan pikseller %18'i aşıyorsa ölçüm reddedilir.
+- Beyaz alanın parlaklığı 100–240 dışında, kanal aralığı 28 üstünde, kırpılan pikseller %18 üstünde veya parlaklık standart sapması 18 üstündeyse ölçüm reddedilir.
+- Seri boyunca RGB farkının aralığı 10'u veya herhangi bir bölgenin ortanca rengine en büyük RGB uzaklığı 15'i aşıyorsa çekim değişken kabul edilir ve rapor üretilmez.
+
+Bu eşikler pratik çekim filtreleridir; laboratuvarla doğrulanmış sahtelik veya kalite eşikleri değildir. Otomatik kamera ayarları, görüntü sıkıştırma, ışık, kap geometrisi ve yağın doğal renk farkları ölçümü etkiler. Aynı ortalama renk, aynı kimyasal içerik anlamına gelmez. Referansın orijinalliği uygulama tarafından doğrulanmaz. Polarizasyon, spektrometre, fiziksel geçirgenlik veya bulanıklık ölçümü yapılmaz.
+
+Yağların saflık ve kalite analizi hakkında: [Uluslararası Zeytin Konseyi](https://www.internationaloliveoil.org/olive-world/olive-oil/).
+
+## Veriler
+
+Fotoğraflar yerel bellekte işlenir; sunucuya gönderilmez ve kayıtlara eklenmez. En fazla 30 rapor, kullanıcı “Cihaza kaydet” seçerse tarayıcının `localStorage` alanında saklanır. Tarayıcı verilerini temizlemek kayıtları siler. Harici yazı tipi, analiz servisi veya üçüncü taraf istemci bağımlılığı yoktur. Sunucu yalnızca `dist` dosyalarını sunar. İndirilen raporlar kullanıcı tarafından paylaşılabilir.
+
+## Kontroller
+
+`npm test`: bilinen piksel sonuçları, uç değerler, uygunsuz ışık, kararsız seri, görüntü kırpma ve HTTP sunucusu kontrolleri.
+
+İsteğe bağlı tarayıcı testi: kurulu `playwright-core/index.mjs` yolunu `PLAYWRIGHT_MODULE`, Chromium tabanlı tarayıcı yolunu `BROWSER_EXECUTABLE` ortam değişkeniyle verip `node test/browser-smoke.mjs` çalıştırın. Bu test, demo/fotoğraf, kayıt kalıcılığı, JSON indirme, mobil genişlik ve sahte kamera kaynağının yaşam döngüsünü doğrular. Gerçek telefonda kamera/fener ve fiziksel numuneler ayrıca sınanmalıdır.
