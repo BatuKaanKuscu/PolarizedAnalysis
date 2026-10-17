@@ -6,7 +6,7 @@ test('Existing accounts gain usernames without losing passwords or sessions',asy
  try{
  auth=createAuth(path);server=createServer((req,res)=>auth.handle(req,res));await new Promise(r=>server.listen(0,'127.0.0.1',r));const base='http://127.0.0.1:'+server.address().port;
  const oldSession=await fetch(base+'/api/me',{headers:{Cookie:'ll_session=old-cookie'}}),user=(await oldSession.json()).user;assert.equal(user.id,'legacy-id');assert.match(user.username,/^user_[a-f0-9]{16}$/);
- const login=await fetch(base+'/api/auth/login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({identifier:user.username,password:'legacy-password-123'})});assert.equal(login.status,200);assert.equal((await login.json()).user.email,'legacy@example.com');
+ const login=await fetch(base+'/api/auth/login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({username:user.username,password:'legacy-password-123'})});assert.equal(login.status,200);const publicUser=(await login.json()).user;assert.equal(publicUser.username,user.username);for(const key of ['email','name','organization','bio'])assert.equal(key in publicUser,false);
  await new Promise(r=>server.close(r));server=null;auth.close();auth=null;
  const check=new DatabaseSync(path);const row=check.prepare('SELECT * FROM users').get();assert.equal(row.username,user.username);assert.equal(row.password,digest);assert.equal(row.salt,'legacy-salt');check.close();auth=createAuth(path);auth.close();auth=null;
  }finally{if(server)await new Promise(r=>server.close(r));auth?.close();for(const suffix of ['','-wal','-shm'])await unlink(path+suffix).catch(()=>{});}

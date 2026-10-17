@@ -22,18 +22,18 @@ Bu SQLite kurulumu tek sunucu örneği içindir. Birden fazla sunucu örneği ar
 
 ## Giriş ve profil
 
-- Benzersiz kullanıcı adı, e-posta ve parola ile hesap oluşturma. Kullanıcı adı veya e-postayla giriş ve çıkış.
-- Kullanıcı adı 3–24 karakterdir; harfle başlar, a-z, rakam ve alt çizgi içerir. Büyük/küçük harf farkıyla ikinci hesap açılamaz. Profilde değiştirilebilir; başka kullanıcıya ait ad alınamaz.
+- Yalnızca benzersiz kullanıcı adı ve parola ile hesap oluşturma, giriş ve çıkış. E-posta veya gerçek ad istenmez.
+- Kullanıcı adı 3–24 karakterdir; harfle başlar; harf, rakam ve alt çizgi içerir. Yazım biçimi korunur, karşılaştırma büyük/küçük harfe duyarsızdır. Büyük/küçük harf farkıyla ikinci hesap açılamaz. Profilde değiştirilebilir; başka kullanıcıya ait ad alınamaz.
 - Eski hesaplara ilk açılışta benzersiz `user_...` kullanıcı adı atanır; kullanıcı kimliği, e-posta, parola ve mevcut oturumlar korunur.
 - Kullanıcı menüsü, kişisel karşılama alanı ve `@kullanıcıadı` profil başlığı. Profiller diğer kişilere açık bir kullanıcı dizini oluşturmaz.
 - Diğer oturumları kapatma, mevcut oturumu ve başka kullanıcıların oturumlarını etkilemez.
-- Ad, kurum, biyografi, animasyon tercihi ve profil rengi düzenleme.
+- Yalnızca kullanıcı adı, animasyon tercihi ve profil rengi düzenleme. Gerçek ad, kurum ve biyografi alanları yoktur.
 - Mevcut parolayla parola değiştirme; değişiklik diğer oturumları iptal eder.
 - Tuzlanmış `scrypt` parola özeti; rastgele oturum anahtarının SHA-256 özeti sunucuda tutulur.
 - 7 günlük HttpOnly, SameSite=Lax oturum çerezi. Production/HTTPS altında Secure kullanılır.
 - Durum değiştiren API isteklerinde JSON içerik türü ve kaynak kontrolü; hesap işlemlerinde kısa süreli IP tabanlı deneme sınırı.
 
-E-posta sahipliği doğrulaması, e-posta gönderimi ve unutulan parola kurtarma bu sürümde yoktur. Arayüz bunlar için çalışmayan bağlantılar sunmaz. Misafirler ölçümleri kullanabilir. Profil ve hesap bilgileri paylaşılmadan önce uygun veri saklama/yedekleme düzeni kurulmalıdır.
+E-posta toplanmaz. Kullanıcı API yanıtları ad, e-posta, kurum veya biyografi içermez. Eski veritabanı sütunları uyumluluk için tutulur; yeni hesaplar için gerçek e-posta yerine dahili yer tutucu kullanılır. Unutulan parola kurtarma bu sürümde yoktur. Arayüz bunlar için çalışmayan bağlantılar sunmaz. Misafirler ölçümleri kullanabilir. Profil ve hesap bilgileri paylaşılmadan önce uygun veri saklama/yedekleme düzeni kurulmalıdır.
 
 ## Üç farklı ölçüm yolu
 
