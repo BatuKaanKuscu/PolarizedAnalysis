@@ -1,15 +1,10 @@
 import {measure,quality,summarize,cropRect,overlap,METHOD} from './analysis.mjs';
 import {drawDemo,scenarios} from './demo.mjs';
-import {createWorkspace,normalizeWorkspace,addProfile,updateProfile,removeProfile,withReport} from './workspace.mjs';
+import {currentUser} from './site.mjs';
 import {suggestRegions} from './locate.mjs';
 const $=id=>document.getElementById(id),all=s=>[...document.querySelectorAll(s)],video=$('video'),stage=$('stage'),canvas=$('canvas'),ctx=canvas.getContext('2d',{willReadFrequently:true});
-const KEY='liquid-lens-reports-v2',roles=['reference','sample'];
-const WORKSPACE_KEY='liquid-lens-workspace-v1';
-let workspace=createWorkspace();
-const activeProfile=()=>workspace.profiles.find(p=>p.id===workspace.activeId);
-function refreshRecords(){records=workspace.records.filter(r=>r.profileId===workspace.activeId);}
-function persistWorkspace(next){localStorage.setItem(WORKSPACE_KEY,JSON.stringify(next));workspace=next;refreshRecords();}
-let mode='none',stream=null,imageURL=null,selected='reference',busy=false,generation=0,torch=false,lastReport=null,regions=defaults(),records=[],storageError=false;
+const roles=['reference','sample'];
+let mode='none',stream=null,imageURL=null,selected='reference',busy=false,generation=0,torch=false,lastReport=null,regions=defaults();
 let demoAnimation=null,demoElapsed=0,demoStarted=0,demoPaused=false,demoScenario='stable';
 const reducedMotion=matchMedia('(prefers-reduced-motion: reduce)');
 function demoTime(){return demoElapsed+(demoPaused?0:performance.now()-demoStarted);}
@@ -29,8 +24,7 @@ function controls(){
  $('stop').disabled=(mode==='none'||mode==='demo')&&!busy;$('stop').textContent=busy?'İptal et':'Animasyona dön';
  $('torch').disabled=busy||!stream?.getVideoTracks()[0]?.getCapabilities?.().torch;
  all('.placement button,.roi,.setup input,.setup select,.setup textarea').forEach(e=>e.disabled=busy);
- all('.tab,#profileShortcut,#profileForm button,#profileForm input,#profileForm select,#newProfileForm input,#newProfileForm button,#profileList button').forEach(e=>e.disabled=busy);
- $('deleteProfile').disabled=busy||workspace.profiles.length===1;all('#profileList .selected button').forEach(e=>e.disabled=true);
+ all('[data-nav],#accountToggle').forEach(e=>e.disabled=busy);
  all('#demoPanel button,#demoPanel select').forEach(e=>e.disabled=busy);
  all('#assistPanel button,#assistPanel select').forEach(e=>e.disabled=busy||mode==='none');updateReadiness();
 }
@@ -61,7 +55,7 @@ $('quickNames').onclick=()=>{if(!$('refName').value.trim())$('refName').value='R
 $('regionSize').onchange=()=>{const [w,h]={small:[.14,.18],medium:[.22,.26],large:[.28,.32]}[$('regionSize').value];for(const role of roles){const r=regions[role],cx=r.x+r.w/2,cy=r.y+r.h/2;regions[role]={x:Math.max(0,Math.min(1-w,cx-w/2)),y:Math.max(.07,Math.min(1-h,cy-h/2)),w,h};}invalidate();drawRegions();liveQuality();};
 $('suggest').onclick=()=>{
  if(busy||mode==='none')return;
- try{if(mode==='demo')paintDemo();const source=mode==='camera'?video:mode==='photo'?$('photo'):$('demoCanvas'),w=source.videoWidth||source.naturalWidth||source.width,h=source.videoHeight||source.naturalHeight||source.height,box=stage.getBoundingClientRect();if(!w||!h)throw new Error('Görüntü henüz hazır değil.');const c=document.createElement('canvas');c.width=120;c.height=90;const d=c.getContext('2d'),r=cropRect({x:0,y:0,w:1,h:1},w,h,box.width,box.height);d.drawImage(source,r.x,r.y,r.width,r.height,0,0,c.width,c.height);const suggestion=suggestRegions(d.getImageData(0,0,c.width,c.height).data,c.width,c.height);if(!suggestion){say('İki uygun renkli alan önerilemedi. Kapları yan yana getirin veya kutuları elle taşıyın.');return;}regions=suggestion;$('regionSize').value='suggested';drawRegions();invalidate();liveQuality();say('Alan önerisi yerleştirildi. Kutuların yağ içinde olduğunu gözle kontrol edin; bu işlem yağ türünü tanımaz.');}catch(error){say(error.message);}
+ try{if(mode==='demo')paintDemo();const source=mode==='camera'?video:mode==='photo'?$('photo'):$('demoCanvas'),w=source.videoWidth||source.naturalWidth||source.width,h=source.videoHeight||source.naturalHeight||source.height,box=stage.getBoundingClientRect();if(!w||!h)throw new Error('Görüntü henüz hazır değil.');const c=document.createElement('canvas');c.width=120;c.height=90;const d=c.getContext('2d'),r=cropRect({x:0,y:0,w:1,h:1},w,h,box.width,box.height);d.drawImage(source,r.x,r.y,r.width,r.height,0,0,c.width,c.height);const suggestion=suggestRegions(d.getImageData(0,0,c.width,c.height).data,c.width,c.height);if(!suggestion){say('İki uygun renkli alan önerilemedi. Kapları yan yana getirin veya kutuları elle taşıyın.');return;}regions=suggestion;$('regionSize').value='suggested';drawRegions();invalidate();liveQuality();say('Alan önerisi yerleştirildi. Kutuların sıvının içinde olduğunu gözle kontrol edin; bu işlem sıvı türünü tanımaz.');}catch(error){say(error.message);}
 };
 function geometryIssues(){for(let i=0;i<roles.length;i++)for(let j=i+1;j<roles.length;j++)if(overlap(regions[roles[i]],regions[roles[j]]))return ['Ölçüm kutuları örtüşüyor. Alanları birbirinden ayırın.'];return [];}
 function capture(){
@@ -131,8 +125,8 @@ $('analyze').onclick=async()=>{
   for(let i=0;i<count;i++){if(sourceMode==='camera')await nextFrame();else if(sourceMode==='demo'&&count>1)await new Promise(resolve=>setTimeout(resolve,180));if(ticket!==generation)return;frames.push(capture());$('progress').value=i+1;}
   const report=summarize(frames);
   if(report.issues.length){say('Ölçüm kaydedilmedi. '+report.issues.join(' '));return;}
-  Object.assign(report,{id:crypto.randomUUID(),createdAt:new Date().toISOString(),profileId:workspace.activeId,profileName:activeProfile().name,oilType:$('oilType').value,referenceName:$('refName').value.trim()||'Demo referans',sampleName:$('sampleName').value.trim()||'Demo numune',notes:$('notes').value.trim(),source:sourceMode,demo:sourceMode==='demo',...(sourceMode==='demo'?{demoScenario,demoPaused}:{}),regions:structuredClone(regions),conditions:all('.condition').map(c=>c.checked)});
-  renderReport(report);say(sourceMode==='demo'?'Demo raporu hazır. Gerçek ölçüm değildir ve kayıtlara eklenemez.':'Karşılaştırma hazır. Raporu inceleyip cihazınıza kaydedebilirsiniz.');$('result').scrollIntoView({behavior:'smooth',block:'start'});
+  Object.assign(report,{id:crypto.randomUUID(),createdAt:new Date().toISOString(),referenceName:$('refName').value.trim()||'Demo referans',sampleName:$('sampleName').value.trim()||'Demo numune',notes:$('notes').value.trim(),source:sourceMode,demo:sourceMode==='demo',...(sourceMode==='demo'?{demoScenario,demoPaused}:{}),regions:structuredClone(regions),conditions:all('.condition').map(c=>c.checked)});
+  renderReport(report);say(sourceMode==='demo'?'Animasyon karşılaştırması tamamlandı. Sonuç gerçek bir numuneye ait değildir.':'Karşılaştırma hazır. Sonuçları inceleyebilirsiniz.');$('result').scrollIntoView({behavior:'smooth',block:'start'});
  }catch(e){if(ticket===generation)say(e.message);}
  finally{if(ticket===generation){stage.classList.remove('measuring');busy=false;$('progress').hidden=true;controls();liveQuality();}}
 };
@@ -141,44 +135,22 @@ const date=s=>new Date(s).toLocaleString('tr-TR');
 const rgb=s=>`rgb(${Math.round(s.r)},${Math.round(s.g)},${Math.round(s.b)})`;
 function renderReport(r){
  lastReport=r;const result=$('result');result.replaceChildren();result.hidden=false;
- if(r.demo)result.append(node('p',`DEMO · ${scenarios[r.demoScenario]?.name||'Sentetik görüntü'}${r.demoPaused?' · Duraklatılmış tek kare':''}. Gerçek bir yağ numunesini temsil etmez.`,'demo-alert'));
- const head=node('div',undefined,'result-heading'),left=node('div');left.append(node('span','03 / ÖLÇÜM RAPORU','eyebrow'),node('h2','Görünür fark kaydedildi'),node('p',`${r.oilType} · ${date(r.createdAt)} · ${r.frames} kare`));head.append(left,node('span',r.frames>1?'Seri kontrolü geçti':'Tek kare · kararlılık ölçülmedi','status'));result.append(head);
+ if(r.demo)result.append(node('p',`DEMO · ${scenarios[r.demoScenario]?.name||'Sentetik görüntü'}${r.demoPaused?' · Duraklatılmış tek kare':''}. Gerçek bir sıvı numunesini temsil etmez.`,'demo-alert'));
+ const head=node('div',undefined,'result-heading'),left=node('div');left.append(node('span','03 / ÖLÇÜM RAPORU','eyebrow'),node('h2','Görünür fark kaydedildi'),node('p',`${date(r.createdAt)} · ${r.frames} kare`));head.append(left,node('span',r.frames>1?'Seri kontrolü geçti':'Tek kare · kararlılık ölçülmedi','status'));result.append(head);
  const swatches=node('div',undefined,'swatches');for(const [role,label]of [['reference',r.referenceName],['sample',r.sampleName]]){const wrap=node('div',undefined,'swatch'),color=node('i'),labelNode=node('div',label);color.style.background=rgb(r[role]);labelNode.append(node('small',`${role==='reference'?'Referans':'Numune'} · RGB ${[r[role].r,r[role].g,r[role].b].map(n=>number(n,0)).join(' / ')}`));wrap.append(color,labelNode);swatches.append(wrap);}result.append(swatches);
  const metrics=node('div',undefined,'metrics');for(const [value,label,note]of [[r.distance,'RGB uzaklığı','0–441,7 · kamera birimi'],[r.brightness,'Parlaklık farkı','0–255 · kamera birimi'],[r.range,'Seri fark aralığı',r.frames>1?'Kareler arası RGB fark değişimi':'Tek karede değerlendirilemez']]){const m=node('div',undefined,'metric');m.append(node('b',label==='Seri fark aralığı'&&r.frames===1?'—':number(value)),node('span',label),node('small',note));metrics.append(m);}result.append(metrics);
  const chart=node('div',undefined,'channel-chart');chart.append(node('h3','Kanal farkları · Numune − Referans'));r.channels.forEach((delta,i)=>{const row=node('div',undefined,'channel-row'),track=node('div',undefined,'channel-track'),dot=node('span',undefined,'channel-dot');dot.style.left=(50+delta/255*50)+'%';track.append(dot);row.append(node('span',['R','G','B'][i]),track,node('span',(delta>0?'+':'')+number(delta)));chart.append(row);});chart.append(node('p','Ortadaki çizgi sıfır farktır. Sol: numunede daha düşük, sağ: daha yüksek kanal değeri.','hint'));result.append(chart);
  result.append(node('p','Bu değerler iki alanın kamera renkleri arasındaki farkı gösterir. Düşük fark orijinallik kanıtı değildir; yüksek fark da karışım kanıtı değildir. Işık, kap ve doğal renk farklılıkları sonucu etkileyebilir.'));
  const next=node('div',undefined,'result-next');next.append(node('b','Şimdi ne yapmalıyım?'),node('p',r.demo?'Bu bir animasyon ölçümüdür. Gerçek karşılaştırma için kamerayı açın veya iki numuneyi birlikte gösteren fotoğraf yükleyin.':'Kutuların kap kenarı ve yansıma içermediğini kontrol edin. Aynı numuneleri tekrar ölçerek farkın tekrarlanıp tekrarlanmadığına bakın.'),button('Tekrar ölç',()=>{invalidate();stage.scrollIntoView({behavior:'smooth',block:'center'});controls();}));result.append(next);
  if(r.notes)result.append(node('p','Not: '+r.notes));
- result.append(node('p','Profil: '+(r.profileName||activeProfile().name),'hint'));
  const details=node('details'),summary=node('summary','Çekim kontrolü ve yöntem');details.append(summary,node('p',`Seri içi en büyük bölge sapması: ${number(r.drift)}. Yöntem: ${r.method}. Fiziksel kalibrasyon yapılmamıştır. Pratik eşikler laboratuvar doğrulamasından geçmemiştir.`));result.append(details);
- const actions=node('div',undefined,'actions'),save=button(records.some(x=>x.id===r.id)?'Kaydedildi':'Cihaza kaydet',()=>{if(saveRecord(r)){save.textContent='Kaydedildi';save.disabled=true;}});save.disabled=r.demo||records.some(x=>x.id===r.id);actions.append(save,button('JSON indir',()=>downloadJSON(r)),button('CSV indir',()=>downloadCSV([r])),button('Yazdır / PDF',()=>window.print()));result.append(actions);
+ const actions=node('div',undefined,'actions');actions.append(button('Sonucu indir',()=>downloadJSON(r)),button('Yazdır / PDF',()=>window.print()));result.append(actions);
+
 }
-function validReport(r){return r&&['paired-rgb-v2',METHOD].includes(r.method)&&typeof r.id==='string'&&typeof r.referenceName==='string'&&typeof r.sampleName==='string'&&typeof r.oilType==='string'&&typeof r.notes==='string'&&!r.demo&&Number.isFinite(Date.parse(r.createdAt))&&['distance','brightness','range','drift','frames'].every(k=>Number.isFinite(r[k]))&&roles.every(role=>r[role]&&['r','g','b','brightness','clipped','spread'].every(k=>Number.isFinite(r[role][k])))&&Array.isArray(r.channels)&&r.channels.length===3&&r.channels.every(Number.isFinite);}
-try{const saved=localStorage.getItem(WORKSPACE_KEY);if(saved)workspace=normalizeWorkspace(JSON.parse(saved),validReport);else{const legacy=JSON.parse(localStorage.getItem(KEY)||'[]');workspace=createWorkspace(Array.isArray(legacy)?legacy.filter(validReport):[]);persistWorkspace(workspace);}refreshRecords();}catch{storageError=true;refreshRecords();}
-function saveRecord(r){if(r.demo)return false;if(records.some(x=>x.id===r.id))return true;try{persistWorkspace(withReport(workspace,r));renderHistory();renderProfiles();say('Rapor seçili profile kaydedildi. Fotoğraf saklanmadı.');return true;}catch{say('Tarayıcıya kayıt yapılamadı. JSON veya CSV indirerek raporu saklayın.');return false;}}
-function renderHistory(){
- $('historyOwner').textContent=activeProfile().name+' · Son 30 rapor bu profilde, bu tarayıcıda saklanır. Fotoğraf saklanmaz.';
- $('historyCount').textContent=records.length;const list=$('historyList');list.replaceChildren();$('exportAll').disabled=!records.length;$('clearHistory').disabled=!records.length;
- if(!records.length)list.append(node('div',storageError?'Tarayıcı kayıtlarına erişilemiyor. Ölçüm raporlarını dosya olarak indirebilirsiniz.':'Henüz kayıt yok. Ölçüm yaptıktan sonra “Cihaza kaydet” düğmesini kullanın.','empty'));
- for(const r of records){const item=node('article',undefined,'card history-item'),info=node('div');info.append(node('h3',`${r.referenceName} ↔ ${r.sampleName}`),node('p',`${date(r.createdAt)} · ${r.oilType} · RGB farkı ${number(r.distance)}`));const actions=node('div',undefined,'actions');actions.append(button('Raporu aç',()=>{showView('measure');renderReport(r);$('result').scrollIntoView({behavior:'smooth'});}),button('JSON',()=>downloadJSON(r)),button('Sil',()=>{if(!confirm('Bu rapor silinsin mi?'))return;try{persistWorkspace({...workspace,records:workspace.records.filter(x=>x.id!==r.id)});renderHistory();renderProfiles();if(lastReport?.id===r.id)renderReport(lastReport);}catch{alert('Kayıt silinemedi. Tarayıcı depolama izinlerini kontrol edin.');}},'danger'));item.append(info,actions);list.append(item);}
-}
-function download(name,content,type){const url=URL.createObjectURL(new Blob([content],{type})),a=node('a');a.href=url;a.download=name;document.body.append(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),10000);}
-function downloadJSON(r){download(`liquid-lens-${r.id}.json`,JSON.stringify({...r,interpretation:'Görsel karşılaştırma. Saflık, güvenlik veya karışım oranı belirlenemez.'},null,2),'application/json');}
-function downloadCSV(rows){const headers=['Profil','Tarih','Yağ türü','Referans','Numune','Kaynak','Demo','Kare sayısı','RGB farkı','Parlaklık farkı','Seri aralığı','R farkı','G farkı','B farkı','Notlar','Yöntem','Sınır'];const quote=v=>'"'+(typeof v==='string'&&/^[\s]*[=+@-]/.test(v)?"'"+v:String(v)).replaceAll('"','""')+'"';const data=rows.map(r=>[r.profileName||activeProfile().name,r.createdAt,r.oilType,r.referenceName,r.sampleName,r.source,r.demo,r.frames,r.distance,r.brightness,r.range,...r.channels,r.notes,r.method,'Saflık ve karışım oranı belirlenemez']);download('liquid-lens-rapor.csv','\uFEFF'+[headers,...data].map(row=>row.map(quote).join(',')).join('\r\n'),'text/csv;charset=utf-8');}
-$('exportAll').onclick=()=>downloadCSV(records);
-$('clearHistory').onclick=()=>{if(!confirm(activeProfile().name+' profilindeki tüm ölçüm raporları silinsin mi?'))return;try{persistWorkspace({...workspace,records:workspace.records.filter(r=>r.profileId!==workspace.activeId)});renderHistory();renderProfiles();invalidate();}catch{alert('Kayıtlar temizlenemedi.');}};
-function showView(view){if(view!=='measure'&&(mode!=='none'||busy))suspendSource();all('.view').forEach(e=>e.hidden=e.id!=='view-'+view);all('.tab').forEach(b=>{const active=b.dataset.view===view;b.classList.toggle('active',active);if(active)b.setAttribute('aria-current','page');else b.removeAttribute('aria-current');});if(view==='history')renderHistory();if(view==='profile')renderProfiles();if(view==='measure'&&mode==='none')startDemo();}
-all('.tab').forEach(b=>b.onclick=()=>{if(busy)return;showView(b.dataset.view);});
-document.addEventListener('visibilitychange',()=>{if(document.hidden&&(stream||busy)){suspendSource();say('Sayfa arka plana geçtiği için çekim durduruldu.');}else if(document.hidden&&mode==='demo')setDemoPaused(true);else if(!document.hidden&&mode==='none'&&!$('view-measure').hidden)startDemo();});
+
+function downloadJSON(report){const url=URL.createObjectURL(new Blob([JSON.stringify({...report,interpretation:'Görsel sıvı karşılaştırması; kimyasal bileşim veya saflık belirlenemez.'},null,2)],{type:'application/json'}));const a=document.createElement('a');a.href=url;a.download='liquid-lens-sonuc.json';a.click();setTimeout(()=>URL.revokeObjectURL(url),10000);}
+window.addEventListener('viewchange',e=>{if(e.detail==='measure'){if(mode==='none')startDemo();}else suspendSource();});
+window.addEventListener('accountchange',()=>{if(busy)return;const user=currentUser();$('demoScenario').value=user?.scenario||'stable';if(mode==='demo')startDemo();});
+document.addEventListener('visibilitychange',()=>{if(document.hidden&&(stream||busy))suspendSource();else if(document.hidden&&mode==='demo')setDemoPaused(true);else if(!document.hidden&&mode==='none'&&!$('view-measure').hidden&&!$('method-camera').hidden)startDemo();});
 window.addEventListener('pagehide',()=>{generation++;stopCamera();stopDemo();if(imageURL)URL.revokeObjectURL(imageURL);});
-function renderProfiles(){
- const p=activeProfile();$('profileShortcutName').textContent=p.name;$('profileAvatar').textContent=p.name.slice(0,1).toLocaleUpperCase('tr-TR');$('profileName').value=p.name;$('profileOrganization').value=p.organization;$('profileOil').value=p.oilType;$('profileScenario').value=p.scenario;$('profileRecordCount').textContent=records.length;$('deleteProfile').disabled=workspace.profiles.length===1||busy;
- const list=$('profileList');list.replaceChildren();for(const profile of workspace.profiles){const row=node('div',undefined,'profile-row'+(profile.id===p.id?' selected':'')),info=node('div');info.append(node('b',profile.name),node('small',`${profile.organization||'Yerel profil'} · ${workspace.records.filter(r=>r.profileId===profile.id).length} kayıt`));const choose=button(profile.id===p.id?'Seçili':'Profile geç',()=>{try{persistWorkspace({...workspace,activeId:profile.id});applyProfile();$('profileMessage').textContent=profile.name+' profiline geçildi.';}catch{$('profileMessage').textContent='Profil değişikliği kaydedilemedi.';}});choose.disabled=profile.id===p.id||busy;row.append(info,choose);list.append(row);}
- if(storageError)$('profileMessage').textContent='Tarayıcı depolamasına erişilemedi. Değişiklikler kaydedilemeyebilir.';
-}
-function applyProfile(){suspendSource();const p=activeProfile();$('oilType').value=p.oilType;$('demoScenario').value=p.scenario;$('refName').value='';$('sampleName').value='';$('notes').value='';all('.condition').forEach(c=>c.checked=false);renderHistory();renderProfiles();if(!$('view-measure').hidden)startDemo();}
-$('profileShortcut').onclick=()=>showView('profile');
-$('newProfileForm').onsubmit=e=>{e.preventDefault();try{persistWorkspace(addProfile(workspace,{name:$('newProfileName').value},crypto.randomUUID()));$('newProfileName').value='';applyProfile();$('profileMessage').textContent='Yeni profil oluşturuldu ve seçildi.';}catch(error){$('profileMessage').textContent=error.message;}};
-$('profileForm').onsubmit=e=>{e.preventDefault();try{persistWorkspace(updateProfile(workspace,workspace.activeId,{name:$('profileName').value,organization:$('profileOrganization').value,oilType:$('profileOil').value,scenario:$('profileScenario').value}));applyProfile();$('profileMessage').textContent='Profil ve varsayılan tercihler kaydedildi.';}catch(error){$('profileMessage').textContent=error.message;}};
-$('deleteProfile').onclick=()=>{if(!confirm(activeProfile().name+' profili ve bu profile ait '+records.length+' rapor silinsin mi?'))return;try{persistWorkspace(removeProfile(workspace,workspace.activeId));applyProfile();$('profileMessage').textContent='Profil silindi.';}catch(error){$('profileMessage').textContent=error.message;}};
-drawRegions();applyProfile();controls();
+drawRegions();controls();

@@ -1,57 +1,62 @@
-# Liquid Lens 2.0
+# Liquid Lens 3.0
 
-Zeytinyağı ve diğer bitkisel yağlar için **aynı karede görsel karşılaştırma** aracı. Saflık, asitlik, güvenlik, kimyasal bileşim, yağ türü veya karışım oranı belirlemez. Sahtelik tespiti veya %100 doğruluk iddiası yoktur.
+Genel sıvı karşılaştırma sitesi. Ana sayfa, ölçüm alanı, yöntem kılavuzu ve gerçek hesap/profil akışı içerir. Ürün türü seçimi, ölçüm arşivi ve tarayıcıda ölçüm saklama kaldırılmıştır. Önceki sürümün tarayıcı verileri otomatik silinmez; yeni sürüm onları okumaz.
 
-## Render
+## Çalıştırma
+
+Node **22.13+** gerekir; Node 24 desteklenir. Harici çalışma zamanı bağımlılığı yoktur. `npm start` sunucuyu `PORT` (varsayılan 3000) üzerinden `0.0.0.0` adresinde açar. Kamera için HTTPS veya localhost gerekir. Uygulama artık yalnızca statik site olarak sunulamaz; hesap API'si için Node sunucusu gerekir.
+
+## Render kurulumu ve hesap kalıcılığı
 
 - Branch: `main`
 - Root Directory: boş
 - Build Command: `npm install --omit=dev`
 - Start Command: `npm start`
+- Production ortamı: `NODE_ENV=production`
 
-Node 22 ve üzeri gerekir. Harici çalışma zamanı bağımlılığı yoktur. Sunucu `PORT` değişkenini kullanır ve `0.0.0.0` üzerinde dinler. Kamera için HTTPS veya localhost gerekir.
+Hesap veritabanı varsayılan olarak `.data/accounts.sqlite` dosyasında oluşturulur. **Render'ın varsayılan dosya sistemi geçicidir. Kalıcı disk olmadan hesaplar ve oturumlar yeniden yayınlama/yeniden başlatmada kaybolur.**
 
-## Kullanım
+Kalıcı hesaplar için Render'da ücretli bir Web Service'e kalıcı disk bağlanmalıdır. Diskin mount path değeri `/var/data` ise `AUTH_DB_PATH=/var/data/accounts.sqlite` ortam değişkenini ayarlayın. Bu değişkeni disk bağlandıktan sonra kullanın. Disk oluşturulması veya plan değişikliği bu kod tarafından yapılmaz. Mevcut `.data/accounts.sqlite` otomatik taşınmaz; canlı kullanıcı verisi oluştuysa yeniden konumlandırmadan önce tutarlı veritabanı yedeği alın. [Render kalıcı disk belgeleri](https://render.com/docs/disks).
 
-1. Yağ türünü, referans ve numune adlarını girin.
-2. Aynı tip şeffaf kaplarda eşit yükseklikteki iki yağı aynı sade arka plan önünde yan yana yerleştirin. Hazırlık kutularını işaretleyin.
-3. Kamera açın veya iki kabı birlikte gösteren bir fotoğraf yükleyin.
-4. Referans ve numune kutularını yağın iç kısmına taşıyın. Önce bölge düğmesini seçip görüntüye dokunabilir, kutuları sürükleyebilir veya kutuya odaklanıp ok tuşlarını kullanabilirsiniz.
-5. Ölçümü başlatın. Uygun olmayan çekimlerde verilen düzeltme önerilerini uygulayın.
-6. Sonucu cihazınıza kaydedin; JSON, CSV veya tarayıcının yazdır/PDF seçeneğiyle dışa aktarın.
+Bu SQLite kurulumu tek sunucu örneği içindir. Birden fazla sunucu örneği arasında kullanıcı eşitlemesi sağlamaz. Hesap bilgileri veritabanında saklanır; ölçüm görüntüleri ve sonuçları hesaplara yüklenmez.
 
-Animasyonlu görünüm açılışta otomatik gösterilir. Kamera veya fotoğraftan “Animasyona dön” ile bu görünüme dönülür. Demo sentetiktir ve açıkça etiketlenir; sabit numune, değişen renk, dalgalanan ışık ve hareketli parlama senaryoları vardır. Hazırlık onayları demo için gerekmez. Çalışan animasyondan 180 ms aralıkla 8 kare alınır; duraklatılmış animasyon tek kare olarak ölçülür. Hareket azaltma tercihi açıkken demo duraklatılmış başlar. Demo raporları profile kaydedilmez; gerçek kamera veya kimyasal analiz doğrulaması olarak kullanılamaz.
+## Giriş ve profil
 
-## Kolay çekim araçları
+- E-posta/parola ile hesap oluşturma, giriş ve çıkış.
+- Ad, kurum, biyografi, animasyon tercihi ve profil rengi düzenleme.
+- Mevcut parolayla parola değiştirme; değişiklik diğer oturumları iptal eder.
+- Tuzlanmış `scrypt` parola özeti; rastgele oturum anahtarının SHA-256 özeti sunucuda tutulur.
+- 7 günlük HttpOnly, SameSite=Lax oturum çerezi. Production/HTTPS altında Secure kullanılır.
+- Durum değiştiren API isteklerinde JSON içerik türü ve kaynak kontrolü; hesap işlemlerinde kısa süreli IP tabanlı deneme sınırı.
 
-“Alan öner” düğmesi, görüntünün sol ve sağ yarısında renkli ve homojen dikdörtgenler önerir. Yağ, sıvı veya kap tanıma modeli değildir; renkli arka planlar da önerilebilir. Kullanıcı kutuları gözle doğrulamalıdır. Uygun iki alan bulunamazsa mevcut kutular korunur. Kutu boyutu elle değiştirilebilir. Canlı parlaklık göstergeleri, hazırlık yönlendirmesi ve hızlı adlandırma gerçek çekimi kolaylaştırır. Beyaz kontrol bölgesi kullanılmaz.
+E-posta sahipliği doğrulaması, e-posta gönderimi ve unutulan parola kurtarma bu sürümde yoktur. Arayüz bunlar için çalışmayan bağlantılar sunmaz. Misafirler ölçümleri kullanabilir. Profil ve hesap bilgileri paylaşılmadan önce uygun veri saklama/yedekleme düzeni kurulmalıdır.
 
-## Yerel profiller
+## Üç farklı ölçüm yolu
 
-Profiller sekmesinden ad, isteğe bağlı kurum, varsayılan yağ türü ve açılış animasyonu düzenlenebilir. En fazla 12 profil oluşturulur; her profil kendi son 30 raporunu tutar. Profil seçimi ve tercihler sayfa yenilendiğinde korunur. Raporlara profil kimliği ve ölçüm anındaki profil adı eklenir; JSON ve CSV dışa aktarımlarında da bulunur. Kayıtları temizlemek sadece seçili profili etkiler. Profil silme, onaydan sonra o profile ait raporları siler; son profil silinemez.
+### Görsel karşılaştırma
 
-Eski `liquid-lens-reports-v2` kayıtları ilk açılışta “Kişisel profil”e taşınır. Profil ve raporlar `liquid-lens-workspace-v1` altında tek bir tarayıcı kaydıyla saklanır. Eski kayıt anahtarı geçişte silinmez. Bunlar yerel çalışma alanlarıdır: kimlik doğrulama, parola veya bulut eşitleme yoktur. Aynı tarayıcıyı kullanan herkes profilleri açabilir. Tarayıcı verilerini temizlemek kayıtları siler; JSON/CSV dosyalarını ayrıca saklayın.
+İki alan görünür görüntüden kırpılıp 64 × 64 piksele örneklenir. Ortalama RGB uzaklığı, parlaklık farkı ve seri kararlılığı gösterilir. Kameradan 8 kare, fotoğraftan tek kare alınır. Kamera geri çağrısı desteklenmiyorsa 180 ms aralık kullanılır. Işık ve kararlılık eşikleri pratik çekim filtreleridir; laboratuvar doğrulaması değildir. Kamera işleme, pozlama, beyaz dengesi ve yansımalar sonucu etkiler.
 
-## Yöntem
+Alan önerisi renkli, homojen dikdörtgenler arar; sıvı tanıma modeli değildir. Renkli arka planları da seçebilir. Kullanıcı alanları doğrulamalıdır. Beyaz kontrol bölgesi kullanılmaz.
 
-- Görüntünün `object-fit: cover` ile görünür olan kısmına karşılık gelen iki bölge 64×64 piksele örneklenir.
-- Ortalama R/G/B, aritmetik parlaklık `(R+G+B)/3`, kırpılan piksel oranı ve parlaklığın uzamsal standart sapması hesaplanır.
-- Kamerada 8 ayrı kare alınır; desteklenen tarayıcılarda video kare geri çağrısı kullanılır. Desteklemeyen tarayıcılarda 180 ms arayla örneklenir. Fotoğrafta yalnızca 1 kare vardır.
-- Her bölgenin ölçümlerinin ortancası raporlanır. RGB uzaklığı `sqrt(ΔR²+ΔG²+ΔB²)` (0–441,67), mutlak parlaklık farkı (0–255) ve işaretli kanal farkları gösterilir.
-- Ayrı arka plan kontrol bölgesi kullanılmaz; fiziksel kalibrasyon yapılmaz.
-- Bir numune alanının parlaklığı 25 altında veya 235 üstündeyse; herhangi bir kanalı ≤3 veya ≥252 olan pikseller %18'i aşıyorsa ölçüm reddedilir.
-- Seri boyunca RGB farkının aralığı 10'u veya herhangi bir bölgenin ortanca rengine en büyük RGB uzaklığı 15'i aşıyorsa çekim değişken kabul edilir ve rapor üretilmez.
+### Optik yoğunluk / absorbans
 
-Bu eşikler pratik çekim filtreleridir; laboratuvarla doğrulanmış sahtelik veya kalite eşikleri değildir. Otomatik kamera ayarları, görüntü sıkıştırma, ışık, kap geometrisi ve yağın doğal renk farkları ölçümü etkiler. Aynı ortalama renk, aynı kimyasal içerik anlamına gelmez. Referansın orijinalliği uygulama tarafından doğrulanmaz. Polarizasyon, spektrometre, fiziksel geçirgenlik veya bulanıklık ölçümü yapılmaz.
+Doğrusal yanıtlı harici ışık sensörünün referans (I₀), numune (I) ve karanlık (Id) okumaları girilir:
 
-Yağların saflık ve kalite analizi hakkında: [Uluslararası Zeytin Konseyi](https://www.internationaloliveoil.org/olive-world/olive-oil/).
+`T = (I - Id) / (I₀ - Id)` ve `A = -log10(T)`.
 
-## Veriler
+Kaynak, dalga boyu, kap/optik yol ve sensör ayarları eşleşmelidir. İşlenmiş kamera RGB değerleri bu forma girilmemelidir. Düzeltilmiş referans ve sinyal pozitif değilse hesaplama yapılmaz. T > 1 sonuçları kırpılmaz; deney koşulunu kontrol etme uyarısı verilir. A boyutsuz optik yoğunluktur; kütle yoğunluğu değildir. Konsantrasyon veya karışım oranı hesaplanmaz. [IUPAC Beer–Lambert yasası](https://goldbook.iupac.org/terms/view/B00626).
 
-Fotoğraflar yerel bellekte işlenir; sunucuya gönderilmez ve kayıtlara eklenmez. Her profil için en fazla 30 rapor, kullanıcı “Cihaza kaydet” seçerse tarayıcının `localStorage` alanında saklanır. Tarayıcı verilerini temizlemek kayıtları siler. Harici yazı tipi, analiz servisi veya üçüncü taraf istemci bağımlılığı yoktur. Sunucu yalnızca `dist` dosyalarını sunar. İndirilen raporlar kullanıcı tarafından paylaşılabilir.
+### Kütle yoğunluğu
 
-## Kontroller
+Gerçek tartı ve hacim ölçümleri kullanılır: `ρ = (dolu kap kütlesi - boş kap kütlesi) / hacim`. Gram ve mL girdilerinden g/mL ile kg/m³ hesaplanır; ölçüm sıcaklığı belirtilir. Kamera kütle, hacim veya sıcaklık ölçmez. Ölçüm cihazlarının belirsizliği hesaplanmaz. [BIPM tanımı](https://jcgm.bipm.org/vim/en/1.5.html).
 
-`npm test`: bilinen piksel sonuçları, uç değerler, uygunsuz ışık, kararsız seri, görüntü kırpma ve HTTP sunucusu kontrolleri.
+**Hiçbir yol tek başına saflığı doğrulamaz.** Arayüz saf/sahte sınıflandırması, saflık yüzdesi veya %100 doğruluk iddiası üretmez. Saflık için maddeye özgü doğrulanmış analitik yöntem gerekir.
 
-İsteğe bağlı tarayıcı testi: kurulu `playwright-core/index.mjs` yolunu `PLAYWRIGHT_MODULE`, Chromium tabanlı tarayıcı yolunu `BROWSER_EXECUTABLE` ortam değişkeniyle verip `node test/browser-smoke.mjs` çalıştırın. Bu test, demo/fotoğraf, kayıt kalıcılığı, JSON indirme, mobil genişlik ve sahte kamera kaynağının yaşam döngüsünü doğrular. Gerçek telefonda kamera/fener ve fiziksel numuneler ayrıca sınanmalıdır.
+## Veri ve testler
+
+Görüntüler cihazda işlenir ve sunucuya gönderilmez. Ölçüm arşivi yoktur; kullanıcı isterse o anki görsel sonucu JSON olarak indirebilir veya yazdırabilir. Hesap bilgileri SQLite'ta saklanır. `.data/` ve SQLite dosyaları Git tarafından yok sayılır.
+
+`npm test`: piksel hesapları, alan önerisi, seri kararlılığı, fiziksel formüller, HTTP sunucusu ve hesap API'si testleri. Hesap testleri geçici bir dosyada gerçek oturum açma, profil ayrımı, parola değişikliği ve yeniden açılan veritabanıyla kalıcılığı sınar.
+
+Tarayıcı testi için kurulu `playwright-core/index.mjs` yolunu `PLAYWRIGHT_MODULE`, Chromium tabanlı tarayıcı yolunu `BROWSER_EXECUTABLE` ile belirtip `node test/site-smoke.mjs` çalıştırın. Test ana sayfa, mobil menü, kamera/fotoğraf, bilimsel formlar ve gerçek kayıt/giriş/profil akışını kontrol eder. Ekran görüntüleri `test-results/` klasörüne yazılır. Fiziksel telefonda kamera/fener ve gerçek sensör deneyleri ayrıca doğrulanmalıdır.

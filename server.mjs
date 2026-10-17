@@ -2,10 +2,13 @@ import { createServer } from 'node:http';
 import { readFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import { resolve, sep, extname } from 'node:path';
+import {createAuth} from './auth.mjs';
+const auth=createAuth();
 
 const root = fileURLToPath(new URL('./dist/', import.meta.url));
 const types = { '.html': 'text/html; charset=utf-8', '.css': 'text/css; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.mjs': 'text/javascript; charset=utf-8', '.svg': 'image/svg+xml' };
 const server = createServer(async (req, res) => {
+  if(await auth.handle(req,res))return;
   if (req.method !== 'GET' && req.method !== 'HEAD') {
     res.writeHead(405, { Allow: 'GET, HEAD' });
     res.end();
@@ -28,4 +31,4 @@ const server = createServer(async (req, res) => {
 server.listen(Number(process.env.PORT || 3000), '0.0.0.0', () => {
   console.log(`Liquid Lens listening on port ${server.address().port}`);
 });
-process.on('SIGTERM', () => server.close());
+process.on('SIGTERM', () => server.close(()=>auth.close()));

@@ -1,3 +1,5 @@
 node_modules/
 *.tar.gz
 test-results/
+.data/
+*.sqlite*
