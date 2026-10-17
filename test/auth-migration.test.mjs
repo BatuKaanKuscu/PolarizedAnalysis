@@ -1,0 +1,13 @@
+import {test} from 'node:test';import assert from 'node:assert/strict';import {DatabaseSync} from 'node:sqlite';import {createServer} from 'node:http';import {tmpdir} from 'node:os';import {join} from 'node:path';import {randomUUID,scryptSync,createHash} from 'node:crypto';import {unlink} from 'node:fs/promises';import {createAuth} from '../auth.mjs';
+test('Existing accounts gain usernames without losing passwords or sessions',async()=>{
+ const path=join(tmpdir(),'liquid-lens-migration-'+randomUUID()+'.sqlite'),seed=new DatabaseSync(path),digest=scryptSync('legacy-password-123','legacy-salt',64).toString('hex');
+ seed.exec("CREATE TABLE users(id TEXT PRIMARY KEY,email TEXT UNIQUE NOT NULL,name TEXT NOT NULL,organization TEXT NOT NULL DEFAULT '',bio TEXT NOT NULL DEFAULT '',scenario TEXT NOT NULL DEFAULT 'stable',accent TEXT NOT NULL DEFAULT 'green',salt TEXT NOT NULL,password TEXT NOT NULL,created_at TEXT NOT NULL);CREATE TABLE sessions(token TEXT PRIMARY KEY,user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,expires INTEGER NOT NULL);");
+ seed.prepare('INSERT INTO users(id,email,name,salt,password,created_at) VALUES(?,?,?,?,?,?)').run('legacy-id','legacy@example.com','Existing user','legacy-salt',digest,'2026-01-01T00:00:00Z');seed.prepare('INSERT INTO sessions VALUES(?,?,?)').run(createHash('sha256').update('old-cookie').digest('hex'),'legacy-id',Date.now()+60000);seed.close();let auth,server;
+ try{
+ auth=createAuth(path);server=createServer((req,res)=>auth.handle(req,res));await new Promise(r=>server.listen(0,'127.0.0.1',r));const base='http://127.0.0.1:'+server.address().port;
+ const oldSession=await fetch(base+'/api/me',{headers:{Cookie:'ll_session=old-cookie'}}),user=(await oldSession.json()).user;assert.equal(user.id,'legacy-id');assert.match(user.username,/^user_[a-f0-9]{16}$/);
+ const login=await fetch(base+'/api/auth/login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({identifier:user.username,password:'legacy-password-123'})});assert.equal(login.status,200);assert.equal((await login.json()).user.email,'legacy@example.com');
+ await new Promise(r=>server.close(r));server=null;auth.close();auth=null;
+ const check=new DatabaseSync(path);const row=check.prepare('SELECT * FROM users').get();assert.equal(row.username,user.username);assert.equal(row.password,digest);assert.equal(row.salt,'legacy-salt');check.close();auth=createAuth(path);auth.close();auth=null;
+ }finally{if(server)await new Promise(r=>server.close(r));auth?.close();for(const suffix of ['','-wal','-shm'])await unlink(path+suffix).catch(()=>{});}
+});

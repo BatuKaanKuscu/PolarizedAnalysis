@@ -22,7 +22,11 @@ Bu SQLite kurulumu tek sunucu örneği içindir. Birden fazla sunucu örneği ar
 
 ## Giriş ve profil
 
-- E-posta/parola ile hesap oluşturma, giriş ve çıkış.
+- Benzersiz kullanıcı adı, e-posta ve parola ile hesap oluşturma. Kullanıcı adı veya e-postayla giriş ve çıkış.
+- Kullanıcı adı 3–24 karakterdir; harfle başlar, a-z, rakam ve alt çizgi içerir. Büyük/küçük harf farkıyla ikinci hesap açılamaz. Profilde değiştirilebilir; başka kullanıcıya ait ad alınamaz.
+- Eski hesaplara ilk açılışta benzersiz `user_...` kullanıcı adı atanır; kullanıcı kimliği, e-posta, parola ve mevcut oturumlar korunur.
+- Kullanıcı menüsü, kişisel karşılama alanı ve `@kullanıcıadı` profil başlığı. Profiller diğer kişilere açık bir kullanıcı dizini oluşturmaz.
+- Diğer oturumları kapatma, mevcut oturumu ve başka kullanıcıların oturumlarını etkilemez.
 - Ad, kurum, biyografi, animasyon tercihi ve profil rengi düzenleme.
 - Mevcut parolayla parola değiştirme; değişiklik diğer oturumları iptal eder.
 - Tuzlanmış `scrypt` parola özeti; rastgele oturum anahtarının SHA-256 özeti sunucuda tutulur.
