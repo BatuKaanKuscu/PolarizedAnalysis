@@ -1,3 +1,4 @@
+import {verdict} from './verdict.mjs';
 import {measure,quality,summarize,cropRect,overlap,METHOD} from './analysis.mjs';
 import {drawDemo,scenarios} from './demo.mjs';
 import {currentUser} from './site.mjs';
@@ -124,7 +125,7 @@ $('analyze').onclick=async()=>{
   const frames=[],count=mode==='camera'||(mode==='demo'&&!demoPaused)?8:1;$('progress').max=count;stage.classList.add('measuring');
   for(let i=0;i<count;i++){if(sourceMode==='camera')await nextFrame();else if(sourceMode==='demo'&&count>1)await new Promise(resolve=>setTimeout(resolve,180));if(ticket!==generation)return;frames.push(capture());$('progress').value=i+1;}
   const report=summarize(frames);
-  if(report.issues.length){say('Ölçüm kaydedilmedi. '+report.issues.join(' '));return;}
+  report.comparison=verdict(report);
   Object.assign(report,{id:crypto.randomUUID(),createdAt:new Date().toISOString(),referenceName:$('refName').value.trim()||'Demo referans',sampleName:$('sampleName').value.trim()||'Demo numune',notes:$('notes').value.trim(),source:sourceMode,demo:sourceMode==='demo',...(sourceMode==='demo'?{demoScenario,demoPaused}:{}),regions:structuredClone(regions),conditions:all('.condition').map(c=>c.checked)});
   renderReport(report);say(sourceMode==='demo'?'Animasyon karşılaştırması tamamlandı. Sonuç gerçek bir numuneye ait değildir.':'Karşılaştırma hazır. Sonuçları inceleyebilirsiniz.');$('result').scrollIntoView({behavior:'smooth',block:'start'});
  }catch(e){if(ticket===generation)say(e.message);}
@@ -136,14 +137,15 @@ const rgb=s=>`rgb(${Math.round(s.r)},${Math.round(s.g)},${Math.round(s.b)})`;
 function renderReport(r){
  lastReport=r;const result=$('result');result.replaceChildren();result.hidden=false;
  if(r.demo)result.append(node('p',`DEMO · ${scenarios[r.demoScenario]?.name||'Sentetik görüntü'}${r.demoPaused?' · Duraklatılmış tek kare':''}. Gerçek bir sıvı numunesini temsil etmez.`,'demo-alert'));
- const head=node('div',undefined,'result-heading'),left=node('div');left.append(node('span','03 / ÖLÇÜM RAPORU','eyebrow'),node('h2','Görünür fark kaydedildi'),node('p',`${date(r.createdAt)} · ${r.frames} kare`));head.append(left,node('span',r.frames>1?'Seri kontrolü geçti':'Tek kare · kararlılık ölçülmedi','status'));result.append(head);
- const swatches=node('div',undefined,'swatches');for(const [role,label]of [['reference',r.referenceName],['sample',r.sampleName]]){const wrap=node('div',undefined,'swatch'),color=node('i'),labelNode=node('div',label);color.style.background=rgb(r[role]);labelNode.append(node('small',`${role==='reference'?'Referans':'Numune'} · RGB ${[r[role].r,r[role].g,r[role].b].map(n=>number(n,0)).join(' / ')}`));wrap.append(color,labelNode);swatches.append(wrap);}result.append(swatches);
- const metrics=node('div',undefined,'metrics');for(const [value,label,note]of [[r.distance,'RGB uzaklığı','0–441,7 · kamera birimi'],[r.brightness,'Parlaklık farkı','0–255 · kamera birimi'],[r.range,'Seri fark aralığı',r.frames>1?'Kareler arası RGB fark değişimi':'Tek karede değerlendirilemez']]){const m=node('div',undefined,'metric');m.append(node('b',label==='Seri fark aralığı'&&r.frames===1?'—':number(value)),node('span',label),node('small',note));metrics.append(m);}result.append(metrics);
- const chart=node('div',undefined,'channel-chart');chart.append(node('h3','Kanal farkları · Numune − Referans'));r.channels.forEach((delta,i)=>{const row=node('div',undefined,'channel-row'),track=node('div',undefined,'channel-track'),dot=node('span',undefined,'channel-dot');dot.style.left=(50+delta/255*50)+'%';track.append(dot);row.append(node('span',['R','G','B'][i]),track,node('span',(delta>0?'+':'')+number(delta)));chart.append(row);});chart.append(node('p','Ortadaki çizgi sıfır farktır. Sol: numunede daha düşük, sağ: daha yüksek kanal değeri.','hint'));result.append(chart);
- result.append(node('p','Bu değerler iki alanın kamera renkleri arasındaki farkı gösterir. Düşük fark orijinallik kanıtı değildir; yüksek fark da karışım kanıtı değildir. Işık, kap ve doğal renk farklılıkları sonucu etkileyebilir.'));
+ const v=r.comparison||verdict(r);
+ const head=node('div',undefined,'result-heading'),left=node('div');left.append(node('span','03 / KARŞILAŞTIRMA SONUCU','eyebrow'),node('h2',v.title),node('p',`${date(r.createdAt)} · ${r.frames} kare`));head.append(left,node('span',r.demo?'Örnek test':r.frames>1?'Canlı çekim':'Fotoğraf','status'));result.append(head,node('p',v.explanation));
+ for(const issue of v.issues)result.append(node('p',issue,'form-message error'));
+ const swatches=node('div',undefined,'swatches');for(const [role,label]of [['reference',r.referenceName],['sample',r.sampleName]]){const wrap=node('div',undefined,'swatch'),color=node('i');color.style.background=rgb(r[role]);wrap.append(color,node('div',label));swatches.append(wrap);}result.append(swatches);
+ if(!v.issues.length){const explanation=node('div',undefined,'result-next');explanation.append(node('b','Neye baktık?'),node('p',v.colorDifference<.025?'Renkleri birbirine yakın görünüyor.':'Renklerinde fark görülüyor.'),node('p',Math.abs(v.relativeOpticalDifference)<.035?'Işığı geçirme görünümleri birbirine yakın.':'Bir taraf kamerada daha koyu görünüyor.'),node('p','Görüntü seri çekim boyunca yeterince sabit kaldı.'));result.append(explanation);}
+ result.append(node('p','Bu sonuç yalnızca bu çekimdeki görünümü anlatır. Aynı içerik veya saflık onayı değildir.','hint'));
  const next=node('div',undefined,'result-next');next.append(node('b','Şimdi ne yapmalıyım?'),node('p',r.demo?'Bu bir animasyon ölçümüdür. Gerçek karşılaştırma için kamerayı açın veya iki numuneyi birlikte gösteren fotoğraf yükleyin.':'Kutuların kap kenarı ve yansıma içermediğini kontrol edin. Aynı numuneleri tekrar ölçerek farkın tekrarlanıp tekrarlanmadığına bakın.'),button('Tekrar ölç',()=>{invalidate();stage.scrollIntoView({behavior:'smooth',block:'center'});controls();}));result.append(next);
  if(r.notes)result.append(node('p','Not: '+r.notes));
- const details=node('details'),summary=node('summary','Çekim kontrolü ve yöntem');details.append(summary,node('p',`Seri içi en büyük bölge sapması: ${number(r.drift)}. Yöntem: ${r.method}. Fiziksel kalibrasyon yapılmamıştır. Pratik eşikler laboratuvar doğrulamasından geçmemiştir.`));result.append(details);
+ const details=node('details'),summary=node('summary','Çekim kontrolü ve yöntem');details.append(summary,node('p',`Renk oranı farkı: ${number(v.colorDifference,4)}. Göreli kamera ışık farkı: ${v.relativeOpticalDifference===null?'ölçülemedi':number(v.relativeOpticalDifference,4)}. Yöntem: ${v.method}. Kalibre edilmiş optik yoğunluk değildir. Işık uçuş süresi ölçülmez. Karar eşikleri laboratuvarla doğrulanmamıştır.`));result.append(details);
  const actions=node('div',undefined,'actions');actions.append(button('Sonucu indir',()=>downloadJSON(r)),button('Yazdır / PDF',()=>window.print()));result.append(actions);
 
 }

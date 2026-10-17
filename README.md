@@ -35,32 +35,20 @@ Bu SQLite kurulumu tek sunucu örneği içindir. Birden fazla sunucu örneği ar
 
 E-posta toplanmaz. Kullanıcı API yanıtları ad, e-posta, kurum veya biyografi içermez. Eski veritabanı sütunları uyumluluk için tutulur; yeni hesaplar için gerçek e-posta yerine dahili yer tutucu kullanılır. Unutulan parola kurtarma bu sürümde yoktur. Arayüz bunlar için çalışmayan bağlantılar sunmaz. Misafirler ölçümleri kullanabilir. Profil ve hesap bilgileri paylaşılmadan önce uygun veri saklama/yedekleme düzeni kurulmalıdır.
 
-## Üç farklı ölçüm yolu
+## Otomatik iki sıvı karşılaştırması
 
-### Görsel karşılaştırma
+Ölçüm alanı tek akıştan oluşur; kütle/hacim ve harici sensör giriş formları kaldırılmıştır. İki alan 64 × 64 piksele örneklenir. Kameradan sekiz kare, fotoğraftan tek kare alınır. Seri ortancaları, karanlık/parlama ve kareler arası değişim kontrolüyle birlikte kullanılır.
 
-İki alan görünür görüntüden kırpılıp 64 × 64 piksele örneklenir. Ortalama RGB uzaklığı, parlaklık farkı ve seri kararlılığı gösterilir. Kameradan 8 kare, fotoğraftan tek kare alınır. Kamera geri çağrısı desteklenmiyorsa 180 ms aralık kullanılır. Işık ve kararlılık eşikleri pratik çekim filtreleridir; laboratuvar doğrulaması değildir. Kamera işleme, pozlama, beyaz dengesi ve yansımalar sonucu etkiler.
+Kanal ortalamalarına yaklaşık sRGB doğrusallaştırması uygulanır. Normalize renk oranlarının Öklid uzaklığı ve göreli ışık farkı `−log10(Y_sample/Y_reference)` birlikte değerlendirilir. Bu kamera göstergesi kalibre edilmiş absorbans veya mutlak optik yoğunluk değildir. Telefonun işlenmiş pikselleri, sensör yanıtı ve otomatik ayarları fiziksel ışık ölçümü yerine geçmez. Işık uçuş süresi, kütle yoğunluğu, kimyasal kimlik ve saflık ölçülmez.
 
-Alan önerisi renkli, homojen dikdörtgenler arar; sıvı tanıma modeli değildir. Renkli arka planları da seçebilir. Kullanıcı alanları doğrulamalıdır. Beyaz kontrol bölgesi kullanılmaz.
+Karar eşiği: renk farkı > 0.075 veya mutlak göreli ışık farkı > 0.12 ise belirgin fark; her ikisi sırasıyla < 0.025 ve < 0.035 ise benzer görünüm. Ara bölge belirsiz bırakılır. Bu pratik eşikler gerçek numunelerde doğrulanmamıştır; doğruluk oranı veya kimyasal kimlik iddiası yoktur. Kalite sorunu veya tek fotoğraf varsa sonuç yetersizdir. Rapor gündelik dille açıklanır, teknik göstergeler ayrıntı alanında tutulur; indirilen JSON da karar ve sınırlarını içerir.
 
-### Optik yoğunluk / absorbans
-
-Doğrusal yanıtlı harici ışık sensörünün referans (I₀), numune (I) ve karanlık (Id) okumaları girilir:
-
-`T = (I - Id) / (I₀ - Id)` ve `A = -log10(T)`.
-
-Kaynak, dalga boyu, kap/optik yol ve sensör ayarları eşleşmelidir. İşlenmiş kamera RGB değerleri bu forma girilmemelidir. Düzeltilmiş referans ve sinyal pozitif değilse hesaplama yapılmaz. T > 1 sonuçları kırpılmaz; deney koşulunu kontrol etme uyarısı verilir. A boyutsuz optik yoğunluktur; kütle yoğunluğu değildir. Konsantrasyon veya karışım oranı hesaplanmaz. [IUPAC Beer–Lambert yasası](https://goldbook.iupac.org/terms/view/B00626).
-
-### Kütle yoğunluğu
-
-Gerçek tartı ve hacim ölçümleri kullanılır: `ρ = (dolu kap kütlesi - boş kap kütlesi) / hacim`. Gram ve mL girdilerinden g/mL ile kg/m³ hesaplanır; ölçüm sıcaklığı belirtilir. Kamera kütle, hacim veya sıcaklık ölçmez. Ölçüm cihazlarının belirsizliği hesaplanmaz. [BIPM tanımı](https://jcgm.bipm.org/vim/en/1.5.html).
-
-**Hiçbir yol tek başına saflığı doğrulamaz.** Arayüz saf/sahte sınıflandırması, saflık yüzdesi veya %100 doğruluk iddiası üretmez. Saflık için maddeye özgü doğrulanmış analitik yöntem gerekir.
+Alan önerisi renkli homojen dikdörtgenler arar; sıvı tanıma modeli değildir. Kutular kullanıcı tarafından kontrol edilmelidir. Aynı kap, eşit sıvı seviyesi, arkadan eşit aydınlatma ve yer değiştirerek tekrar çekim önerilir. Demo sonuçları açıkça sentetik olarak işaretlenir.
 
 ## Veri ve testler
 
 Görüntüler cihazda işlenir ve sunucuya gönderilmez. Ölçüm arşivi yoktur; kullanıcı isterse o anki görsel sonucu JSON olarak indirebilir veya yazdırabilir. Hesap bilgileri SQLite'ta saklanır. `.data/` ve SQLite dosyaları Git tarafından yok sayılır.
 
-`npm test`: piksel hesapları, alan önerisi, seri kararlılığı, fiziksel formüller, HTTP sunucusu ve hesap API'si testleri. Hesap testleri geçici bir dosyada gerçek oturum açma, profil ayrımı, parola değişikliği ve yeniden açılan veritabanıyla kalıcılığı sınar.
+`npm test`: piksel hesapları, alan önerisi, seri kararlılığı, göreli ışık ve renk kararı, HTTP sunucusu ve hesap API'si testleri. Hesap testleri geçici bir dosyada gerçek oturum açma, profil ayrımı, parola değişikliği ve yeniden açılan veritabanıyla kalıcılığı sınar.
 
-Tarayıcı testi için kurulu `playwright-core/index.mjs` yolunu `PLAYWRIGHT_MODULE`, Chromium tabanlı tarayıcı yolunu `BROWSER_EXECUTABLE` ile belirtip `node test/site-smoke.mjs` çalıştırın. Test ana sayfa, mobil menü, kamera/fotoğraf, bilimsel formlar ve gerçek kayıt/giriş/profil akışını kontrol eder. Ekran görüntüleri `test-results/` klasörüne yazılır. Fiziksel telefonda kamera/fener ve gerçek sensör deneyleri ayrıca doğrulanmalıdır.
+Tarayıcı testi için kurulu `playwright-core/index.mjs` yolunu `PLAYWRIGHT_MODULE`, Chromium tabanlı tarayıcı yolunu `BROWSER_EXECUTABLE` ile belirtip `node test/site-smoke.mjs` çalıştırın. Test ana sayfa, mobil menü, kamera/fotoğraf, otomatik karşılaştırma ve gerçek kayıt/giriş/profil akışını kontrol eder. Ekran görüntüleri `test-results/` klasörüne yazılır. Fiziksel telefonda kamera/fener ve gerçek sensör deneyleri ayrıca doğrulanmalıdır.

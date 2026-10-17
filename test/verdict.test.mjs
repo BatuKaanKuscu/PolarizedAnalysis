@@ -1,0 +1,10 @@
+import {test} from 'node:test';
+import assert from 'node:assert/strict';
+import {measure,summarize} from '../dist/analysis.mjs';
+import {verdict} from '../dist/verdict.mjs';
+const c=(r,g,b)=>measure(new Uint8ClampedArray([r,g,b,255]),1,1);
+const report=(a,b,n=8)=>summarize(Array.from({length:n},()=>({reference:a,sample:b})));
+test('Identical stable appearance is similar without claiming identity',()=>{const r=verdict(report(c(140,130,80),c(140,130,80)));assert.equal(r.state,'similar');assert.equal(r.relativeOpticalDifference,0);assert.equal(r.identityConfirmed,false);});
+test('Color and light each independently detect a visible difference',()=>{assert.equal(verdict(report(c(150,120,80),c(80,120,150))).state,'different');const a=c(180,180,180),b=c(110,110,110);const r=verdict(report(a,b));assert.equal(r.state,'different');assert.ok(r.relativeOpticalDifference>0);assert.equal(verdict(report(b,a)).state,'different');assert.ok(verdict(report(b,a)).relativeOpticalDifference<0);});
+test('Small intermediate differences remain inconclusive',()=>assert.equal(verdict(report(c(150,150,150),c(140,140,140))).state,'uncertain'));
+test('Darkness, clipping, movement and single photos cannot yield a confident verdict',()=>{for(const x of [report(c(10,10,10),c(10,10,10)),report(c(255,120,80),c(255,120,80)),report(c(150,120,80),c(150,120,80),1)])assert.equal(verdict(x).state,'insufficient');const frames=Array.from({length:8},(_,i)=>({reference:c(100+i*10,100+i*10,100+i*10),sample:c(100+i*10,100+i*10,100+i*10)}));assert.equal(verdict(summarize(frames)).state,'insufficient');assert.throws(()=>verdict({reference:{r:NaN},sample:{}}));});
