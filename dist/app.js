@@ -1,4 +1,5 @@
 import {verdict} from './verdict.mjs';
+import {CameraAssistant} from './camera-assistant.mjs';
 import {measure,quality,summarize,cropRect,overlap,METHOD} from './analysis.mjs';
 import {drawDemo,scenarios} from './demo.mjs';
 import {currentUser} from './site.mjs';
@@ -7,6 +8,42 @@ const $=id=>document.getElementById(id),all=s=>[...document.querySelectorAll(s)]
 const roles=['reference','sample'];
 let mode='none',stream=null,imageURL=null,selected='reference',busy=false,generation=0,torch=false,lastReport=null,regions=defaults();
 let demoAnimation=null,demoElapsed=0,demoStarted=0,demoPaused=false,demoScenario='stable';
+let assistant=null,adjusting=false,lastAdjustment=0;
+const settle=()=>new Promise(resolve=>setTimeout(resolve,650));
+function cameraInfo(text){$('cameraHelpStatus').textContent=text;}
+function cameraControls(){
+ const available=mode==='camera'&&assistant?.active,range=assistant?.capabilities.exposureCompensation;
+ $('cameraTools').dataset.available=String(!!available);
+ for(const id of ['autoCamera','autoTorch','fixCamera','resetCamera'])$(id).disabled=!available||busy||adjusting;
+ const settings=assistant?.settings()||{};
+ $('autoTorch').disabled=!available||busy||adjusting||assistant.capabilities.torch!==true;
+ $('exposureSlider').disabled=!available||busy||adjusting||!range||!Number.isFinite(settings.exposureCompensation)||range.max<=range.min;
+ if(range){$('exposureSlider').min=range.min;$('exposureSlider').max=range.max;$('exposureSlider').step=range.step>0?range.step:1/3;}
+ if(Number.isFinite(settings.exposureCompensation)){$('exposureSlider').value=settings.exposureCompensation;$('exposureValue').textContent=settings.exposureCompensation.toFixed(2)+' EV';}else $('exposureValue').textContent='Desteklenmiyor';
+ if(available){torch=settings.torch===true;$('torch').textContent=torch?'Feneri kapat':'Fener';}
+ $('cameraCapabilities').textContent=available?['exposureMode','focusMode','whiteBalanceMode'].map((k,i)=>['Pozlama','Odak','Beyaz dengesi'][i]+': '+(assistant.capabilities[k]?.includes('continuous')?'otomatik destekli':'tarayıcı kontrolü yok')).join(' · '):'Canlı kamerada cihazın desteklediği ayarlar burada görünür.';
+}
+async function correctCamera(manual=false){
+ if(!assistant||adjusting||mode!=='camera'||busy)return;
+ const active=assistant,ticket=generation;adjusting=true;controls();
+ try{const frame=capture(),r=await active.adjust(frame,{allowTorch:$('autoTorch').checked});if(ticket!==generation)return;
+  cameraInfo(r.ok?'Kamera ayarı uygulandı; görüntünün oturması bekleniyor…':r.reason==='unverified'?'Ayar istendi ancak kamera uygulandığını doğrulamadı.':r.reason==='rejected'?'Kamera ayarı kabul etmedi. Işığı veya çekim açısını değiştir.':quality(frame).length?'Bu sorun cihaz ayarıyla giderilemiyor. Yansımayı azalt, arkadaki ışığı eşitle ve telefonu sabitle.':'Işık uygun; ek düzeltme gerekmiyor.');
+  if(r.ok){invalidate();await settle();if(ticket!==generation)return;const issues=quality(capture());cameraInfo(issues.length?'Ayar uygulandı; çekim hâlâ düzeltme istiyor. '+issues.join(' '):'Ayar uygulandı. Işık ön kontrolü uygun; alanları kontrol et.');}
+  if(manual&&ticket===generation&&geometryIssues().length){$('suggest').onclick();cameraInfo(geometryIssues().length?'Kutular örtüşüyor; uygun alan bulunamadı. Kutuları elle ayır.':'Alan önerisi yerleştirildi. Kutuların sıvı içinde olduğunu kontrol et.');}
+ }catch{if(ticket===generation)cameraInfo('Otomatik düzenleme tamamlanamadı. Kamerayı yeniden açabilirsin.');}
+ finally{if(ticket===generation){adjusting=false;lastAdjustment=performance.now();controls();liveQuality();}}
+}
+$('fixCamera').onclick=()=>correctCamera(true);
+$('autoCamera').onchange=()=>{invalidate();cameraInfo($('autoCamera').checked?'Otomatik ışık desteği açık.':'Otomatik ışık desteği kapalı; ayarları elle yönetebilirsin.');};
+$('autoTorch').onchange=()=>{invalidate();cameraInfo($('autoTorch').checked?'Çok karanlıkta fener denenebilir; parlama algılanırsa kapatılır.':'Otomatik fener kapalı.');};
+$('exposureSlider').onchange=async()=>{
+ if(!assistant||busy||adjusting)return;const active=assistant,ticket=generation;adjusting=true;const value=Number($('exposureSlider').value);$('autoCamera').checked=false;invalidate();controls();
+ try{const r=await active.set('exposureCompensation',value);if(ticket===generation){cameraInfo(r.ok?'Işık ayarı uygulandı. Otomatik düzenleme kapatıldı.':'Kamera istenen ışık ayarını doğrulamadı.');await settle();}}finally{if(ticket===generation){adjusting=false;controls();liveQuality();}}
+};
+$('resetCamera').onclick=async()=>{
+ if(!assistant||busy||adjusting)return;const active=assistant,ticket=generation;adjusting=true;invalidate();controls();
+ try{await active.reset();await active.configure();if(ticket===generation){$('autoCamera').checked=true;$('autoTorch').checked=false;cameraInfo('Başlangıç ayarları istendi. Desteklenen otomatik modlar açıldı.');await settle();}}catch{if(ticket===generation)cameraInfo('Ayarlar sıfırlanamadı. Kamerayı yeniden aç.');}finally{if(ticket===generation){adjusting=false;controls();liveQuality();}}
+};
 const reducedMotion=matchMedia('(prefers-reduced-motion: reduce)');
 function demoTime(){return demoElapsed+(demoPaused?0:performance.now()-demoStarted);}
 function stopDemo(){if(demoAnimation!==null)cancelAnimationFrame(demoAnimation);demoAnimation=null;}
@@ -21,20 +58,20 @@ function node(tag,text,cls){const n=document.createElement(tag);if(text!==undefi
 function button(text,fn,cls){const b=node('button',text,cls);b.onclick=fn;return b;}
 function ready(){return mode==='demo'||(mode!=='none'&&all('.condition').every(c=>c.checked)&&$('refName').value.trim()&&$('sampleName').value.trim());}
 function controls(){
- $('analyze').disabled=busy||!ready();$('start').disabled=busy;$('upload').disabled=busy;document.querySelector('.upload').setAttribute('aria-disabled',String(busy));
+ $('analyze').disabled=busy||adjusting||!ready();$('start').disabled=busy;$('upload').disabled=busy;document.querySelector('.upload').setAttribute('aria-disabled',String(busy));
  $('stop').disabled=(mode==='none'||mode==='demo')&&!busy;$('stop').textContent=busy?'İptal et':'Animasyona dön';
- $('torch').disabled=busy||!stream?.getVideoTracks()[0]?.getCapabilities?.().torch;
+ $('torch').disabled=busy||adjusting||!stream?.getVideoTracks()[0]?.getCapabilities?.().torch;
  all('.placement button,.roi,.setup input,.setup select,.setup textarea').forEach(e=>e.disabled=busy);
  all('[data-nav],#accountToggle').forEach(e=>e.disabled=busy);
  all('#demoPanel button,#demoPanel select').forEach(e=>e.disabled=busy);
- all('#assistPanel button,#assistPanel select').forEach(e=>e.disabled=busy||mode==='none');updateReadiness();
+ all('#assistPanel button,#assistPanel select').forEach(e=>e.disabled=busy||adjusting||mode==='none');updateReadiness();cameraControls();
 }
 function updateReadiness(){
  const missing=[];if(mode==='none')missing.push('Kamera veya fotoğraf açın.');if(mode!=='demo'){if(!$('refName').value.trim()||!$('sampleName').value.trim())missing.push('Referans ve numuneye ad verin.');if(!all('.condition').every(c=>c.checked))missing.push('Hazırlık onaylarını tamamlayın.');}
  $('readiness').textContent=busy?'Ölçüm sürüyor; görüntüyü sabit tutun.':missing.length?missing.join(' '):mode==='demo'?'Animasyon hazır. Doğrudan karşılaştırmayı başlatabilirsiniz.':'Hazırlık tamam. Kutuları kontrol edip karşılaştırmayı başlatın.';
  all('.flow-step').forEach((e,i)=>e.classList.toggle('complete',i===0?mode!=='none':i===1?!!ready():!$('result').hidden));
 }
-function stopCamera(){stream?.getTracks().forEach(t=>t.stop());stream=null;video.srcObject=null;torch=false;$('torch').textContent='Fener';}
+function stopCamera(){assistant?.dispose();assistant=null;adjusting=false;stream?.getTracks().forEach(t=>t.stop());stream=null;video.srcObject=null;torch=false;$('torch').textContent='Fener';cameraInfo('Canlı kamerayı açtığında otomatik destek başlayacak.');}
 function clearSource(){stopCamera();stopDemo();stage.classList.remove('measuring');if(imageURL)URL.revokeObjectURL(imageURL);imageURL=null;$('photo').removeAttribute('src');}
 function invalidate(){$('result').hidden=true;lastReport=null;}
 function setMode(next){mode=next;video.hidden=next!=='camera';$('photo').hidden=next!=='photo';$('demoCanvas').hidden=next!=='demo';$('placeholder').hidden=next!=='none';$('regions').hidden=next==='none';$('demoBadge').hidden=next!=='demo';$('demoPanel').hidden=next!=='demo';$('cameraStatus').textContent={none:'Kaynak bekleniyor',camera:'Canlı kamera',photo:'Tek fotoğraf',demo:'Animasyonlu test'}[next];invalidate();controls();drawRegions();}
@@ -76,6 +113,7 @@ function liveQuality(){
  $('qualityText').textContent=issues.length?issues.join(' '):'Işık ön kontrolü uygun görünüyor. Bölge konumlarını gözle kontrol edin.';
  updateReadiness();
  $('qualityIndicator').textContent=issues.length?'△':'✓';document.querySelector('.quality-strip').classList.toggle('bad',!!issues.length);
+ if(mode==='camera'&&$('autoCamera').checked&&!adjusting&&performance.now()-lastAdjustment>2200)void correctCamera();
 }
 setInterval(liveQuality,900);
 $('start').onclick=async()=>{
@@ -85,6 +123,8 @@ $('start').onclick=async()=>{
   const next=await navigator.mediaDevices.getUserMedia({video:{facingMode:{ideal:'environment'},width:{ideal:1920},height:{ideal:1080}},audio:false});
   if(ticket!==generation){next.getTracks().forEach(t=>t.stop());return;}
   stream=next;video.srcObject=next;await video.play();if(ticket!==generation)return;
+  assistant=new CameraAssistant(stream.getVideoTracks()[0]);const configured=await assistant.configure();if(ticket!==generation)return;
+  cameraInfo(configured.some(r=>r.ok)?'Desteklenen otomatik kamera modları açıldı.':'Bu tarayıcı kamera modlarını kontrol etmiyor; ışık sorunlarında yönlendirme gösterilecek.');lastAdjustment=0;
   setMode('camera');stream.getVideoTracks()[0].addEventListener('ended',()=>{if(mode==='camera'){$('stop').click();say('Kamera bağlantısı kesildi; yeniden açabilirsiniz.');}},{once:true});
   say('Referans ve numuneyi yan yana yerleştirin. Hazırlığı tamamlayıp ölçümü başlatın.');
  }catch(e){if(ticket!==generation)return;clearSource();setMode('none');say(e.name==='NotAllowedError'?'Kamera izni verilmedi. Tarayıcı izinlerini kontrol edin veya fotoğraf yükleyin.':e.name==='NotFoundError'?'Kamera bulunamadı. Fotoğraf yükleyebilirsiniz.':e.message);}
@@ -92,7 +132,7 @@ $('start').onclick=async()=>{
 };
 function suspendSource(){generation++;busy=false;clearSource();setMode('none');$('progress').hidden=true;}
 $('stop').onclick=()=>{suspendSource();if(!$('view-measure').hidden)startDemo();};
-$('torch').onclick=async()=>{if(!stream||busy)return;try{const next=!torch;await stream.getVideoTracks()[0].applyConstraints({advanced:[{torch:next}]});torch=next;$('torch').textContent=next?'Feneri kapat':'Fener';invalidate();say('Fener yansıması ölçüm alanına düşmemeli; iki kap eşit aydınlanmalı.');}catch{say('Bu cihazda fener kontrolü kullanılamıyor.');}};
+$('torch').onclick=async()=>{if(!assistant||busy||adjusting)return;const active=assistant,ticket=generation;adjusting=true;invalidate();controls();try{const r=await active.set('torch',!torch);if(ticket===generation){cameraInfo(r.ok?'Fener ayarı uygulandı. Yansımayı kontrol et.':'Fener ayarı kamera tarafından doğrulanmadı.');await settle();}}finally{if(ticket===generation){adjusting=false;controls();liveQuality();}}};
 document.querySelector('.upload').onkeydown=e=>{if((e.key==='Enter'||e.key===' ')&&!busy){e.preventDefault();$('upload').click();}};
 $('upload').onchange=async e=>{
  const file=e.target.files[0];e.target.value='';if(!file||busy)return;
@@ -118,7 +158,7 @@ function nextFrame(){
  });
 }
 $('analyze').onclick=async()=>{
- if(busy||!ready())return;const ticket=generation,sourceMode=mode;
+ if(busy||adjusting||!ready())return;const ticket=generation,sourceMode=mode;
  const geometry=geometryIssues();if(geometry.length){say(geometry[0]);return;}
  invalidate();busy=true;controls();$('progress').hidden=false;$('progress').value=0;say('Alanlar ölçülüyor; telefonu ve numuneleri sabit tutun.');
  try{
@@ -126,6 +166,7 @@ $('analyze').onclick=async()=>{
   for(let i=0;i<count;i++){if(sourceMode==='camera')await nextFrame();else if(sourceMode==='demo'&&count>1)await new Promise(resolve=>setTimeout(resolve,180));if(ticket!==generation)return;frames.push(capture());$('progress').value=i+1;}
   const report=summarize(frames);
   report.comparison=verdict(report);
+  if(sourceMode==='camera')report.camera={settings:assistant?.snapshot(),adjustments:assistant?.log.slice(-20),automatic:$('autoCamera').checked};
   Object.assign(report,{id:crypto.randomUUID(),createdAt:new Date().toISOString(),referenceName:$('refName').value.trim()||'Demo referans',sampleName:$('sampleName').value.trim()||'Demo numune',notes:$('notes').value.trim(),source:sourceMode,demo:sourceMode==='demo',...(sourceMode==='demo'?{demoScenario,demoPaused}:{}),regions:structuredClone(regions),conditions:all('.condition').map(c=>c.checked)});
   renderReport(report);say(sourceMode==='demo'?'Animasyon karşılaştırması tamamlandı. Sonuç gerçek bir numuneye ait değildir.':'Karşılaştırma hazır. Sonuçları inceleyebilirsiniz.');$('result').scrollIntoView({behavior:'smooth',block:'start'});
  }catch(e){if(ticket===generation)say(e.message);}

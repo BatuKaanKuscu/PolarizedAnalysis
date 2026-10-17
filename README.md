@@ -45,6 +45,14 @@ Karar eşiği: renk farkı > 0.075 veya mutlak göreli ışık farkı > 0.12 ise
 
 Alan önerisi renkli homojen dikdörtgenler arar; sıvı tanıma modeli değildir. Kutular kullanıcı tarafından kontrol edilmelidir. Aynı kap, eşit sıvı seviyesi, arkadan eşit aydınlatma ve yer değiştirerek tekrar çekim önerilir. Demo sonuçları açıkça sentetik olarak işaretlenir.
 
+## Çekim asistanı
+
+Canlı kamerada cihaz yetenekleri sorgulanır. Desteklenen sürekli pozlama, odak ve beyaz dengesi modları istenir. Karanlık/aşırı aydınlık alanlarda pozlama telafisi cihazın sınırları ve adımları içinde kademeli değiştirilir. Bir taraf çok karanlıkken diğeri çok parlaksa veya karanlıkla kırpılma birlikteyse düzeltme yapılmaz; aydınlatma düzeni önerilir. Her istek sonrası kamera ayarı geri okunur; doğrulanamayan ayar başarılı sayılmaz.
+
+Otomatik fener ayrıca onaylanır ve varsayılan kapalıdır. Parlamada açık fener kapatılabilir. Elle EV ayarı otomatik desteği kapatır. Başlangıç ayarlarını sıfırlama ve tek dokunuşla düzeltme düğmeleri bulunur. Ayar sırasında ölçüm başlatılamaz; değişiklikten sonra 650 ms beklenir. Sekiz karelik ölçüm sırasında uygulama kamera ayarını değiştirmez. Cihazın kendi otomatik modları çalışabilir; seri kontrolü değişimleri yakalar. Otomatik destek renk veya parlaklık filtreleriyle görüntüyü değiştirmez. Fotoğraf/demo modunda cihaz kontrolleri kapalıdır.
+
+İndirilen rapor yalnızca gerekli çekim ayarlarını ve son 20 düzenleme isteğinin doğrulanma durumunu içerir; donanım kimliği dışa aktarılmaz. Tarayıcı testleri destekli ve desteksiz kamera akışını, elle EV, sıfırlama ve mobil paneli kontrol eder; gerçek telefon kamera sürücüsü/fener davranışı ayrıca denenmelidir. API referansı: [W3C Image Capture](https://www.w3.org/TR/image-capture/).
+
 ## Veri ve testler
 
 Görüntüler cihazda işlenir ve sunucuya gönderilmez. Ölçüm arşivi yoktur; kullanıcı isterse o anki görsel sonucu JSON olarak indirebilir veya yazdırabilir. Hesap bilgileri SQLite'ta saklanır. `.data/` ve SQLite dosyaları Git tarafından yok sayılır.
