@@ -53,9 +53,9 @@ Otomatik fener ayrıca onaylanır ve varsayılan kapalıdır. Parlamada açık f
 
 İndirilen rapor yalnızca gerekli çekim ayarlarını ve son 20 düzenleme isteğinin doğrulanma durumunu içerir; donanım kimliği dışa aktarılmaz. Tarayıcı testleri destekli ve desteksiz kamera akışını, elle EV, sıfırlama ve mobil paneli kontrol eder; gerçek telefon kamera sürücüsü/fener davranışı ayrıca denenmelidir. API referansı: [W3C Image Capture](https://www.w3.org/TR/image-capture/).
 
-## Canlı kamera ve taşınabilir çekim paneli
+## Canlı kamera ve sabit alt çekim paneli
 
-Kamera görüntüsünün üstünde fotoğraf deklanşörü ve hızlı karşılaştırma düğmesi bulunur. Panel “Taşı” tutamacıyla fare/dokunmayla sürüklenir; görüntü sınırları içinde tutulur ve ekran boyutu değişince konumu uyarlanır. Tutamaç odaktayken ok tuşlarıyla hareket, Shift ile ince hareket, Home veya sıfırlama düğmesiyle başlangıç konumuna dönüş desteklenir. Panel görüntünün piksel verisine dahil edilmez.
+Fotoğraf deklanşörü ve hızlı karşılaştırma düğmesi, ölçüm ekranında pencerenin altına sabitlenir. Sayfa kaydırıldığında yerini korur; sürükleme yoktur. Güvenli ekran kenarı boşluğu ve içerik altında ek pay bırakılır. “Görüntüye dön” düğmesi kamera/fotoğraf alanına geri kaydırır. Kamera görüntüsü sayfanın normal akışındadır. Diğer sayfalara geçilince çekim paneli gizlenir.
 
 Fotoğraf çekmek canlı akışı durdurmaz: son çekim küçük önizlemede görünür. Fotoğrafı açmak statik fotoğraf moduna geçer ve kamerayı kapatır. Aynı deklanşör, fotoğraf veya demo modunda “Kamerayı aç” işlevi görür. Fotoğraf modu seri kararlılığını doğrulayamaz. Karşılaştırma düğmesi hazırlık ve tekrar çekim onaylarına uyar. JPEG fotoğraf en uzun kenarı 1600 pikseli geçmeyecek şekilde yalnızca cihaz belleğinde tutulur; sunucuya yüklenmez. Yeni çekim eskisini değiştirir; silme/kaynak değiştirme fotoğrafın geçici URL'sini serbest bırakır. Ölçüm arşivi oluşturulmaz.
 

@@ -2,7 +2,6 @@ import {verdict} from './verdict.mjs';
 import {CameraAssistant} from './camera-assistant.mjs';
 import {createAIReport} from './ai-client.mjs';
 import {compareRepeat} from './repeat.mjs';
-import {floatingDock} from './floating-dock.mjs';
 import {measure,quality,summarize,cropRect,overlap,METHOD} from './analysis.mjs';
 import {drawDemo,scenarios} from './demo.mjs';
 import {currentUser} from './site.mjs';
@@ -14,7 +13,7 @@ let demoAnimation=null,demoElapsed=0,demoStarted=0,demoPaused=false,demoScenario
 let assistant=null,adjusting=false,lastAdjustment=0;
 let aiReport=null;
 let snapshotBlob=null,snapshotURL=null,snapshotBusy=false;
-const dock=floatingDock(stage,$('shutterDock'),$('dockHandle'),$('resetDock'));
+$('backToCamera').onclick=()=>stage.scrollIntoView({behavior:'smooth',block:'center'});
 function clearSnapshot(){if(snapshotURL)URL.revokeObjectURL(snapshotURL);snapshotURL=null;snapshotBlob=null;$('snapshotImage').removeAttribute('src');$('snapshotPreview').hidden=true;}
 $('deleteSnapshot').onclick=()=>{clearSnapshot();controls();};
 $('openSnapshot').onclick=()=>{if(snapshotBlob&&!busy)void loadPhoto(snapshotBlob);};
@@ -107,7 +106,7 @@ function updateReadiness(){
 function stopCamera(){assistant?.dispose();assistant=null;adjusting=false;stream?.getTracks().forEach(t=>t.stop());stream=null;video.srcObject=null;torch=false;$('torch').textContent='Fener';cameraInfo('Canlı kamerayı açtığında otomatik destek başlayacak.');}
 function clearSource(){clearSnapshot();snapshotBusy=false;endRepeat();qualityHistory=[];for(const role of roles){const p=$('preview-'+role);p.getContext('2d').clearRect(0,0,p.width,p.height);}stopCamera();stopDemo();stage.classList.remove('measuring');if(imageURL)URL.revokeObjectURL(imageURL);imageURL=null;$('photo').removeAttribute('src');}
 function invalidate(){qualityHistory=[];aiReport?.dispose();aiReport=null;$('result').hidden=true;lastReport=null;}
-function setMode(next){mode=next;$('shutterDock').hidden=next==='none';video.hidden=next!=='camera';$('photo').hidden=next!=='photo';$('demoCanvas').hidden=next!=='demo';$('placeholder').hidden=next!=='none';$('regions').hidden=next==='none';$('demoBadge').hidden=next!=='demo';$('demoPanel').hidden=next!=='demo';$('cameraStatus').textContent={none:'Kaynak bekleniyor',camera:'Canlı kamera',photo:'Tek fotoğraf',demo:'Animasyonlu test'}[next];invalidate();controls();drawRegions();dock.refresh();}
+function setMode(next){mode=next;$('shutterDock').hidden=next==='none';document.documentElement.classList.toggle('has-capture-bar',next!=='none');video.hidden=next!=='camera';$('photo').hidden=next!=='photo';$('demoCanvas').hidden=next!=='demo';$('placeholder').hidden=next!=='none';$('regions').hidden=next==='none';$('demoBadge').hidden=next!=='demo';$('demoPanel').hidden=next!=='demo';$('cameraStatus').textContent={none:'Kaynak bekleniyor',camera:'Canlı kamera',photo:'Tek fotoğraf',demo:'Animasyonlu test'}[next];invalidate();controls();drawRegions();}
 function select(role){selected=role;all('.placement [data-role]').forEach(b=>{b.classList.toggle('active',b.dataset.role===role);b.setAttribute('aria-pressed',String(b.dataset.role===role));});all('.roi').forEach(b=>b.classList.toggle('selected',b.dataset.role===role));}
 function drawRegions(){for(const role of roles){const e=document.querySelector(`.roi[data-role="${role}"]`),r=regions[role];Object.assign(e.style,{left:r.x*100+'%',top:r.y*100+'%',width:r.w*100+'%',height:r.h*100+'%'});}select(selected);}
 function move(role,x,y){const r=regions[role];r.x=Math.max(0,Math.min(1-r.w,x-r.w/2));r.y=Math.max(.07,Math.min(1-r.h,y-r.h/2));qualityHistory=[];drawRegions();invalidate();liveQuality();}
