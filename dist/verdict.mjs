@@ -2,6 +2,7 @@
 export const COMPARISON_METHOD='paired-camera-screening-v1';
 const linear=v=>{v/=255;return v<=.04045?v/12.92:((v+.055)/1.055)**2.4;};
 function features(s){const rgb=[s.r,s.g,s.b].map(linear),sum=rgb.reduce((a,b)=>a+b,0);return {color:rgb.map(v=>v/sum),light:.2126*rgb[0]+.7152*rgb[1]+.0722*rgb[2]};}
+export {features as cameraFeatures};
 export function verdict(report){
  const issues=[...(report.issues||[])];
  for(const role of ['reference','sample'])if(!['r','g','b'].every(k=>Number.isFinite(report[role]?.[k])&&report[role][k]>=0&&report[role][k]<=255))throw new Error('Geçersiz kamera verisi');

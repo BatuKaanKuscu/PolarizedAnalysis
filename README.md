@@ -53,6 +53,14 @@ Otomatik fener ayrıca onaylanır ve varsayılan kapalıdır. Parlamada açık f
 
 İndirilen rapor yalnızca gerekli çekim ayarlarını ve son 20 düzenleme isteğinin doğrulanma durumunu içerir; donanım kimliği dışa aktarılmaz. Tarayıcı testleri destekli ve desteksiz kamera akışını, elle EV, sıfırlama ve mobil paneli kontrol eder; gerçek telefon kamera sürücüsü/fener davranışı ayrıca denenmelidir. API referansı: [W3C Image Capture](https://www.w3.org/TR/image-capture/).
 
+## Yer değiştirerek tekrar kontrolü
+
+Uygun bir canlı çekimden sonra iki kabın fiziksel yeri değiştirilir; arayüz referans/numune kutularını birlikte taşır. Kullanıcı kutuların aynı sıvıları izlediğini onaylamadan ikinci ölçüm başlatılamaz. İlk ve ikinci ölçümün yönlü ışık/renk farkları karşılaştırılır. Aynı kaplar, eşit sıvı yüksekliği ve aynı numuneler varsayılır; kap değiştirme algılanmaz. Yanlış etiketleme, kamera işlemesi veya kap etkisi bu kontrolü yanıltabilir. Demo akışı ayrıca işaretlenir; gerçek doğrulama değildir.
+
+Renk farkı vektörleri arasındaki uzaklık > 0.05 veya göreli ışık farklarının yarı farkı > 0.06 ise çekim düzeninin etkisi raporlanır. İki çekimde de benzer veya farklı görünüm varsa tutarlılık belirtilir; diğer durumlar belirsiz kalır. Bunlar doğrulanmamış pratik eşiklerdir. Aynı madde/saflık kararı üretilmez. Yetersiz ikinci çekimde ilk çekim korunur, ikinci çekim yeniden denenebilir. İptal veya kaynak değişikliği bekleyen kontrolü temizler. Sonuçlar yalnızca açık sayfanın belleğinde tutulur; arşiv veya hesap kaydı oluşmaz. İndirilen rapor ilk çekimin sayısal özetini ve tekrar sonucunu ayrı alanlarda içerir.
+
+Seçili bölgelerin yakın görünümleri doğrudan işlenmemiş kırpma alanlarından gösterilir. Canlı panelde ışık, kanal kırpılması ve son dört ön kontrolün kararlılığı ayrı görünür. Ön kontrol, tam sekiz karelik son ölçümün yerini almaz. Görüntü değişimi hareket, ışık veya kameranın otomatik ayarlarından kaynaklanabilir; fiziksel hareket algılayıcı iddiası yoktur.
+
 ## İsteğe bağlı yapay zekâ yorumu
 
 Google Gemini 2.5 Flash-Lite, sayısal kamera özetini günlük Türkçeyle açıklayıp en fazla üç tekrar çekim önerisi sunar. Yapay zekâ görüntüden sıvı tanımaz ve uygulamanın benzer/farklı/belirsiz kararını değiştirmez. Model yorumları hata içerebilir. Yerel karşılaştırma API anahtarı veya yapay zekâ servisi olmadan çalışır.

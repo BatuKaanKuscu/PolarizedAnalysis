@@ -1,6 +1,7 @@
 import {verdict} from './verdict.mjs';
 import {CameraAssistant} from './camera-assistant.mjs';
 import {createAIReport} from './ai-client.mjs';
+import {compareRepeat} from './repeat.mjs';
 import {measure,quality,summarize,cropRect,overlap,METHOD} from './analysis.mjs';
 import {drawDemo,scenarios} from './demo.mjs';
 import {currentUser} from './site.mjs';
@@ -11,6 +12,17 @@ let mode='none',stream=null,imageURL=null,selected='reference',busy=false,genera
 let demoAnimation=null,demoElapsed=0,demoStarted=0,demoPaused=false,demoScenario='stable';
 let assistant=null,adjusting=false,lastAdjustment=0;
 let aiReport=null;
+let repeatSession=null,qualityHistory=[];
+function endRepeat(restore=true){if(repeatSession&&restore)regions=structuredClone(repeatSession.first.regions);repeatSession=null;$('repeatBanner').hidden=true;$('swapConfirmed').checked=false;drawRegions();}
+function beginRepeat(r){
+ if(busy||adjusting||mode!==r.source||!['camera','demo'].includes(mode))return;
+ repeatSession={first:structuredClone(r)};const old=structuredClone(regions);regions={reference:old.sample,sample:old.reference};qualityHistory=[];
+ invalidate();drawRegions();$('repeatBanner').hidden=false;$('swapConfirmed').checked=false;
+ $('repeatInstructions').textContent=r.demo?'Demo tekrarı: kutuların etiketleri yer değiştirdi. Bu işlem gerçek kap değişimini temsil etmez; yalnızca tekrar akışını deneyebilirsin.':'İçlerindeki sıvıları değiştirmeden iki kabın yerini değiştir. Kutuların etiketleri de yer değiştirdi: referans kutusu aynı referans sıvıyı, numune kutusu aynı numuneyi göstermeli.';
+ controls();stage.scrollIntoView({behavior:'smooth',block:'center'});
+}
+$('swapConfirmed').onchange=()=>{invalidate();controls();};
+$('cancelRepeat').onclick=()=>{if(busy||adjusting)return;endRepeat();invalidate();controls();say('Tekrar kontrolü iptal edildi.');};
 const settle=()=>new Promise(resolve=>setTimeout(resolve,650));
 function cameraInfo(text){$('cameraHelpStatus').textContent=text;}
 function cameraControls(){
@@ -58,7 +70,7 @@ function defaults(){return {reference:{x:.15,y:.40,w:.22,h:.26},sample:{x:.63,y:
 function say(text){$('message').textContent=text;}
 function node(tag,text,cls){const n=document.createElement(tag);if(text!==undefined)n.textContent=text;if(cls)n.className=cls;return n;}
 function button(text,fn,cls){const b=node('button',text,cls);b.onclick=fn;return b;}
-function ready(){return mode==='demo'||(mode!=='none'&&all('.condition').every(c=>c.checked)&&$('refName').value.trim()&&$('sampleName').value.trim());}
+function ready(){return (!repeatSession||$('swapConfirmed').checked)&&(mode==='demo'||(mode!=='none'&&all('.condition').every(c=>c.checked)&&$('refName').value.trim()&&$('sampleName').value.trim()));}
 function controls(){
  $('analyze').disabled=busy||adjusting||!ready();$('start').disabled=busy;$('upload').disabled=busy;document.querySelector('.upload').setAttribute('aria-disabled',String(busy));
  $('stop').disabled=(mode==='none'||mode==='demo')&&!busy;$('stop').textContent=busy?'İptal et':'Animasyona dön';
@@ -67,19 +79,23 @@ function controls(){
  all('[data-nav],#accountToggle').forEach(e=>e.disabled=busy);
  all('#demoPanel button,#demoPanel select').forEach(e=>e.disabled=busy);
  all('#assistPanel button,#assistPanel select').forEach(e=>e.disabled=busy||adjusting||mode==='none');updateReadiness();cameraControls();
+ $('swapConfirmed').disabled=busy||adjusting;$('cancelRepeat').disabled=busy||adjusting;
+ all('.repeat-result button').forEach(e=>e.disabled=busy||adjusting);
+ if(repeatSession)for(const id of ['refName','sampleName','demoScenario','positions','quickNames'])$(id).disabled=true;
 }
 function updateReadiness(){
  const missing=[];if(mode==='none')missing.push('Kamera veya fotoğraf açın.');if(mode!=='demo'){if(!$('refName').value.trim()||!$('sampleName').value.trim())missing.push('Referans ve numuneye ad verin.');if(!all('.condition').every(c=>c.checked))missing.push('Hazırlık onaylarını tamamlayın.');}
+ if(repeatSession&&!$('swapConfirmed').checked)missing.push('Kapları yer değiştirip kutuları kontrol ettiğini onayla.');
  $('readiness').textContent=busy?'Ölçüm sürüyor; görüntüyü sabit tutun.':missing.length?missing.join(' '):mode==='demo'?'Animasyon hazır. Doğrudan karşılaştırmayı başlatabilirsiniz.':'Hazırlık tamam. Kutuları kontrol edip karşılaştırmayı başlatın.';
  all('.flow-step').forEach((e,i)=>e.classList.toggle('complete',i===0?mode!=='none':i===1?!!ready():!$('result').hidden));
 }
 function stopCamera(){assistant?.dispose();assistant=null;adjusting=false;stream?.getTracks().forEach(t=>t.stop());stream=null;video.srcObject=null;torch=false;$('torch').textContent='Fener';cameraInfo('Canlı kamerayı açtığında otomatik destek başlayacak.');}
-function clearSource(){stopCamera();stopDemo();stage.classList.remove('measuring');if(imageURL)URL.revokeObjectURL(imageURL);imageURL=null;$('photo').removeAttribute('src');}
-function invalidate(){aiReport?.dispose();aiReport=null;$('result').hidden=true;lastReport=null;}
+function clearSource(){endRepeat();qualityHistory=[];for(const role of roles){const p=$('preview-'+role);p.getContext('2d').clearRect(0,0,p.width,p.height);}stopCamera();stopDemo();stage.classList.remove('measuring');if(imageURL)URL.revokeObjectURL(imageURL);imageURL=null;$('photo').removeAttribute('src');}
+function invalidate(){qualityHistory=[];aiReport?.dispose();aiReport=null;$('result').hidden=true;lastReport=null;}
 function setMode(next){mode=next;video.hidden=next!=='camera';$('photo').hidden=next!=='photo';$('demoCanvas').hidden=next!=='demo';$('placeholder').hidden=next!=='none';$('regions').hidden=next==='none';$('demoBadge').hidden=next!=='demo';$('demoPanel').hidden=next!=='demo';$('cameraStatus').textContent={none:'Kaynak bekleniyor',camera:'Canlı kamera',photo:'Tek fotoğraf',demo:'Animasyonlu test'}[next];invalidate();controls();drawRegions();}
 function select(role){selected=role;all('.placement [data-role]').forEach(b=>{b.classList.toggle('active',b.dataset.role===role);b.setAttribute('aria-pressed',String(b.dataset.role===role));});all('.roi').forEach(b=>b.classList.toggle('selected',b.dataset.role===role));}
 function drawRegions(){for(const role of roles){const e=document.querySelector(`.roi[data-role="${role}"]`),r=regions[role];Object.assign(e.style,{left:r.x*100+'%',top:r.y*100+'%',width:r.w*100+'%',height:r.h*100+'%'});}select(selected);}
-function move(role,x,y){const r=regions[role];r.x=Math.max(0,Math.min(1-r.w,x-r.w/2));r.y=Math.max(.07,Math.min(1-r.h,y-r.h/2));drawRegions();invalidate();liveQuality();}
+function move(role,x,y){const r=regions[role];r.x=Math.max(0,Math.min(1-r.w,x-r.w/2));r.y=Math.max(.07,Math.min(1-r.h,y-r.h/2));qualityHistory=[];drawRegions();invalidate();liveQuality();}
 all('.placement [data-role]').forEach(b=>b.onclick=()=>select(b.dataset.role));
 $('regions').onclick=e=>{if(busy)return;const box=e.target.closest('.roi');if(box){select(box.dataset.role);return;}const b=stage.getBoundingClientRect();move(selected,(e.clientX-b.left)/b.width,(e.clientY-b.top)/b.height);};
 all('.roi').forEach(b=>{
@@ -95,7 +111,7 @@ $('quickNames').onclick=()=>{if(!$('refName').value.trim())$('refName').value='R
 $('regionSize').onchange=()=>{const [w,h]={small:[.14,.18],medium:[.22,.26],large:[.28,.32]}[$('regionSize').value];for(const role of roles){const r=regions[role],cx=r.x+r.w/2,cy=r.y+r.h/2;regions[role]={x:Math.max(0,Math.min(1-w,cx-w/2)),y:Math.max(.07,Math.min(1-h,cy-h/2)),w,h};}invalidate();drawRegions();liveQuality();};
 $('suggest').onclick=()=>{
  if(busy||mode==='none')return;
- try{if(mode==='demo')paintDemo();const source=mode==='camera'?video:mode==='photo'?$('photo'):$('demoCanvas'),w=source.videoWidth||source.naturalWidth||source.width,h=source.videoHeight||source.naturalHeight||source.height,box=stage.getBoundingClientRect();if(!w||!h)throw new Error('Görüntü henüz hazır değil.');const c=document.createElement('canvas');c.width=120;c.height=90;const d=c.getContext('2d'),r=cropRect({x:0,y:0,w:1,h:1},w,h,box.width,box.height);d.drawImage(source,r.x,r.y,r.width,r.height,0,0,c.width,c.height);const suggestion=suggestRegions(d.getImageData(0,0,c.width,c.height).data,c.width,c.height);if(!suggestion){say('İki uygun renkli alan önerilemedi. Kapları yan yana getirin veya kutuları elle taşıyın.');return;}regions=suggestion;$('regionSize').value='suggested';drawRegions();invalidate();liveQuality();say('Alan önerisi yerleştirildi. Kutuların sıvının içinde olduğunu gözle kontrol edin; bu işlem sıvı türünü tanımaz.');}catch(error){say(error.message);}
+ try{if(mode==='demo')paintDemo();const source=mode==='camera'?video:mode==='photo'?$('photo'):$('demoCanvas'),w=source.videoWidth||source.naturalWidth||source.width,h=source.videoHeight||source.naturalHeight||source.height,box=stage.getBoundingClientRect();if(!w||!h)throw new Error('Görüntü henüz hazır değil.');const c=document.createElement('canvas');c.width=120;c.height=90;const d=c.getContext('2d'),r=cropRect({x:0,y:0,w:1,h:1},w,h,box.width,box.height);d.drawImage(source,r.x,r.y,r.width,r.height,0,0,c.width,c.height);const suggestion=suggestRegions(d.getImageData(0,0,c.width,c.height).data,c.width,c.height);if(!suggestion){say('İki uygun renkli alan önerilemedi. Kapları yan yana getirin veya kutuları elle taşıyın.');return;}regions=repeatSession?{reference:suggestion.sample,sample:suggestion.reference}:suggestion;$('regionSize').value='suggested';drawRegions();invalidate();liveQuality();say('Alan önerisi yerleştirildi. Kutuların sıvının içinde olduğunu gözle kontrol edin; bu işlem sıvı türünü tanımaz.');}catch(error){say(error.message);}
 };
 function geometryIssues(){for(let i=0;i<roles.length;i++)for(let j=i+1;j<roles.length;j++)if(overlap(regions[roles[i]],regions[roles[j]]))return ['Ölçüm kutuları örtüşüyor. Alanları birbirinden ayırın.'];return [];}
 function capture(){
@@ -104,15 +120,24 @@ function capture(){
  const w=source.videoWidth||source.naturalWidth||source.width,h=source.videoHeight||source.naturalHeight||source.height;
  if(!w||!h||mode==='none')throw new Error('Görüntü hazır değil. Yeniden kamera veya fotoğraf açın.');
  const bounds=stage.getBoundingClientRect(),frame={};canvas.width=64;canvas.height=64;
- for(const role of roles){const r=cropRect(regions[role],w,h,bounds.width,bounds.height);ctx.drawImage(source,r.x,r.y,r.width,r.height,0,0,64,64);frame[role]=measure(ctx.getImageData(0,0,64,64).data,64,64);}
+ for(const role of roles){const r=cropRect(regions[role],w,h,bounds.width,bounds.height);ctx.drawImage(source,r.x,r.y,r.width,r.height,0,0,64,64);frame[role]=measure(ctx.getImageData(0,0,64,64).data,64,64);const preview=$('preview-'+role);preview.getContext('2d').drawImage(canvas,0,0,preview.width,preview.height);}
  return frame;
 }
+function health(key,state,text){const n=$('health-'+key);n.dataset.state=state;n.querySelector('b').textContent=text;}
 function liveQuality(){
  if(busy)return;
  let issues=[];
- if(mode==='none'){$('qualityText').textContent='Kamera veya fotoğraf açıldığında ışık kontrolü burada görünür.';$('qualityIndicator').textContent='○';document.querySelector('.quality-strip').classList.remove('bad');return;}
- try{const frame=capture();issues=[...geometryIssues(),...quality(frame)];for(const role of roles){const s=frame[role];$('live-'+role).textContent='Parlaklık '+Math.round(s.brightness)+' / 255';$('color-'+role).style.background=`rgb(${s.r},${s.g},${s.b})`;}}catch{issues=['Görüntü hazırlanıyor…'];}
- $('qualityText').textContent=issues.length?issues.join(' '):'Işık ön kontrolü uygun görünüyor. Bölge konumlarını gözle kontrol edin.';
+ if(mode==='none'){$('qualityText').textContent='Kamera veya fotoğraf açıldığında ışık kontrolü burada görünür.';$('qualityIndicator').textContent='○';document.querySelector('.quality-strip').classList.remove('bad');for(const key of ['light','glare','motion'])health(key,'waiting','Bekleniyor');return;}
+ try{
+  const frame=capture();issues=[...geometryIssues(),...quality(frame)];
+  const dark=roles.some(role=>frame[role].brightness<25),bright=roles.some(role=>frame[role].brightness>235),glare=roles.some(role=>frame[role].clipped>.18);
+  health('light',dark||bright?'bad':'good',dark?'Çok karanlık':bright?'Fazla aydınlık':'Uygun');
+  health('glare',glare?'bad':'good',glare?'Ayrıntı kaybı':'Kırpılma düşük');
+  if(mode==='camera'&&!adjusting){qualityHistory.push(frame);qualityHistory=qualityHistory.slice(-4);const movement=qualityHistory.length>=3&&summarize(qualityHistory).issues.some(i=>i.includes('değişken'));health('motion',movement?'bad':qualityHistory.length<3?'waiting':'good',movement?'Görüntü değişiyor':qualityHistory.length<3?'Kontrol ediliyor':'Şimdilik sabit');if(movement)issues.push('Görüntü değişiyor. Telefonu, kapları ve ışığı sabitle.');}
+  else health('motion','waiting',mode==='photo'?'Tek kare':mode==='demo'?'Demo görüntüsü':'Ayar yapılıyor');
+  for(const role of roles){const x=frame[role];$('live-'+role).textContent='Parlaklık '+Math.round(x.brightness)+' / 255';$('color-'+role).style.background=`rgb(${x.r},${x.g},${x.b})`;}
+ }catch{issues=['Görüntü hazırlanıyor…'];for(const key of ['light','glare','motion'])health(key,'waiting','Bekleniyor');}
+ $('qualityText').textContent=issues.length?issues.join(' '):'Işık ön kontrolü uygun görünüyor. Yakın görünümlerde kap kenarı ve yansıma olmadığını kontrol et.';
  updateReadiness();
  $('qualityIndicator').textContent=issues.length?'△':'✓';document.querySelector('.quality-strip').classList.toggle('bad',!!issues.length);
  if(mode==='camera'&&$('autoCamera').checked&&!adjusting&&performance.now()-lastAdjustment>2200)void correctCamera();
@@ -170,6 +195,7 @@ $('analyze').onclick=async()=>{
   report.comparison=verdict(report);
   if(sourceMode==='camera')report.camera={settings:assistant?.snapshot(),adjustments:assistant?.log.slice(-20),automatic:$('autoCamera').checked};
   Object.assign(report,{id:crypto.randomUUID(),createdAt:new Date().toISOString(),referenceName:$('refName').value.trim()||'Demo referans',sampleName:$('sampleName').value.trim()||'Demo numune',notes:$('notes').value.trim(),source:sourceMode,demo:sourceMode==='demo',...(sourceMode==='demo'?{demoScenario,demoPaused}:{}),regions:structuredClone(regions),conditions:all('.condition').map(c=>c.checked)});
+  if(repeatSession){report.repeatValidation=compareRepeat(repeatSession.first,report,$('swapConfirmed').checked);report.firstCapture=repeatSession.first;if(report.comparison.issues.length===0)endRepeat(false);}
   renderReport(report);say(sourceMode==='demo'?'Animasyon karşılaştırması tamamlandı. Sonuç gerçek bir numuneye ait değildir.':'Karşılaştırma hazır. Sonuçları inceleyebilirsiniz.');$('result').scrollIntoView({behavior:'smooth',block:'start'});
  }catch(e){if(ticket===generation)say(e.message);}
  finally{if(ticket===generation){stage.classList.remove('measuring');busy=false;$('progress').hidden=true;controls();liveQuality();}}
@@ -187,6 +213,8 @@ function renderReport(r){
  const swatches=node('div',undefined,'swatches');for(const [role,label]of [['reference',r.referenceName],['sample',r.sampleName]]){const wrap=node('div',undefined,'swatch'),color=node('i');color.style.background=rgb(r[role]);wrap.append(color,node('div',label));swatches.append(wrap);}result.append(swatches);
  if(!v.issues.length){const explanation=node('div',undefined,'result-next');explanation.append(node('b','Neye baktık?'),node('p',v.colorDifference<.025?'Renkleri birbirine yakın görünüyor.':'Renklerinde fark görülüyor.'),node('p',Math.abs(v.relativeOpticalDifference)<.035?'Işığı geçirme görünümleri birbirine yakın.':'Bir taraf kamerada daha koyu görünüyor.'),node('p','Görüntü seri çekim boyunca yeterince sabit kaldı.'));result.append(explanation);}
  result.append(node('p','Bu sonuç yalnızca bu çekimdeki görünümü anlatır. Aynı içerik veya saflık onayı değildir.','hint'));
+ if(r.repeatValidation){const check=node('section',undefined,'repeat-result');check.append(node('span','İKİ ÇEKİMİN KONTROLÜ','eyebrow'),node('h3',r.repeatValidation.title),node('p',r.repeatValidation.explanation),node('p','Bu kontrol de pratik kamera eşikleri kullanır; kimyasal analiz değildir.','hint'));result.append(check);}
+ else if(v.issues.length===0&&['camera','demo'].includes(r.source)){const check=node('section',undefined,'repeat-result');check.append(node('h3','Sonuç yer değiştirince de sürüyor mu?'),node('p',r.demo?'Demo akışında ikinci çekimi deneyebilirsin. Gerçek sıvı kontrolü değildir.':'Kapların yerini değiştirip yeniden ölç. İki çekim birlikte değerlendirilerek konum ve aydınlatma etkisi kontrol edilir.'),button(r.demo?'Demo tekrarını dene':'Yer değiştirerek kontrol et',()=>beginRepeat(r),'primary'));result.append(check);}
  aiReport=createAIReport(r,data=>{if(lastReport===r)r.aiInterpretation=data;});result.append(aiReport.element);
  const next=node('div',undefined,'result-next');next.append(node('b','Şimdi ne yapmalıyım?'),node('p',r.demo?'Bu bir animasyon ölçümüdür. Gerçek karşılaştırma için kamerayı açın veya iki numuneyi birlikte gösteren fotoğraf yükleyin.':'Kutuların kap kenarı ve yansıma içermediğini kontrol edin. Aynı numuneleri tekrar ölçerek farkın tekrarlanıp tekrarlanmadığına bakın.'),button('Tekrar ölç',()=>{invalidate();stage.scrollIntoView({behavior:'smooth',block:'center'});controls();}));result.append(next);
  if(r.notes)result.append(node('p','Not: '+r.notes));
