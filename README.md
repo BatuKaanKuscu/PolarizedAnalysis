@@ -53,6 +53,23 @@ Otomatik fener ayrıca onaylanır ve varsayılan kapalıdır. Parlamada açık f
 
 İndirilen rapor yalnızca gerekli çekim ayarlarını ve son 20 düzenleme isteğinin doğrulanma durumunu içerir; donanım kimliği dışa aktarılmaz. Tarayıcı testleri destekli ve desteksiz kamera akışını, elle EV, sıfırlama ve mobil paneli kontrol eder; gerçek telefon kamera sürücüsü/fener davranışı ayrıca denenmelidir. API referansı: [W3C Image Capture](https://www.w3.org/TR/image-capture/).
 
+## İsteğe bağlı yapay zekâ yorumu
+
+Google Gemini 2.5 Flash-Lite, sayısal kamera özetini günlük Türkçeyle açıklayıp en fazla üç tekrar çekim önerisi sunar. Yapay zekâ görüntüden sıvı tanımaz ve uygulamanın benzer/farklı/belirsiz kararını değiştirmez. Model yorumları hata içerebilir. Yerel karşılaştırma API anahtarı veya yapay zekâ servisi olmadan çalışır.
+
+Etkinleştirme:
+1. [Google AI Studio](https://aistudio.google.com/apikey) üzerinden ücretsiz katmanda bir Gemini API anahtarı oluşturun. Anahtarı Git'e veya sohbete yazmayın.
+2. Render → Environment bölümünde `GEMINI_API_KEY` değişkenine anahtarı ekleyip yeniden dağıtın.
+3. Varsayılan model `gemini-2.5-flash-lite`; istenirse `GEMINI_MODEL` ile değiştirilebilir.
+
+[Google fiyatlandırması](https://ai.google.dev/gemini-api/docs/pricing) bu model için ücretsiz giriş/çıkış kotası gösterir. Kota, bölgesel erişim ve model kullanılabilirliği sağlayıcıya bağlıdır. Kod ücretsiz hesap oluşturmaz veya ücretsiz katmanı zorlayamaz; ücretli faturalandırma açılmış bir anahtarda ücret oluşabilir. Ücretsiz kullanımda gönderilen veriler Google ürünlerini geliştirmek için kullanılabilir. Bu nedenle kullanıcı, sayısal özeti göndermeden önce açıkça onaylar. Fotoğraf, kullanıcı adı, notlar, hesap bilgileri ve cihaz kimlikleri gönderilmez. Sunucu yalnızca izin verilen sayısal alanları yeniden kurar; serbest kullanıcı metni modele aktarılmaz.
+
+`GET /api/ai/status` yalnızca etkinlik ve model bilgisini verir. `POST /api/ai/interpret`, 8 KB sınırı, kaynak kontrolü, sayısal doğrulama ve kullanıcı onayı gerektirir. API anahtarı yalnızca sunucuda tutulur. Varsayılan günlük üst sınır tüm servis için 100 istektir (`AI_DAILY_LIMIT`); soket IP başına dakikada 5 istek, eşzamanlı en fazla 2 çağrı vardır. Vekil sunucu arkasındaki kullanıcılar IP sınırını paylaşabilir. Sınırlar bellektedir; yeniden başlatmada sıfırlanır, birden fazla sunucu örneğinde ortak değildir. Sağlayıcı kotası ayrıca geçerlidir. 20 saniyede zaman aşımı, eksik/engellenmiş model yanıtında açık hata, normal ölçüme devam etme davranışı bulunur.
+
+Model yanıtları HTML olarak çalıştırılmaz. Yeni ölçüm/eski sonucu kapatma, bekleyen yapay zekâ isteğini iptal eder; sağlayıcı zaten aldıysa kota tüketimi geri alınamaz. Sonuç indirildiğinde varsa yapay zekâ yorumu ayrı `aiInterpretation` alanındadır.
+
+Yapay zekâ sunucu testleri `npm test` kapsamındadır. `node test/ai-browser.mjs`, mevcut tarayıcı testiyle aynı `PLAYWRIGHT_MODULE` ve `BROWSER_EXECUTABLE` ayarlarını kullanır; onay, veri azaltma, kota hatası, yeniden deneme ve mobil görünümü sahte servisle sınar. Gerçek Gemini yanıtı, geçerli API anahtarı olmadan test edilemez.
+
 ## Veri ve testler
 
 Görüntüler cihazda işlenir ve sunucuya gönderilmez. Ölçüm arşivi yoktur; kullanıcı isterse o anki görsel sonucu JSON olarak indirebilir veya yazdırabilir. Hesap bilgileri SQLite'ta saklanır. `.data/` ve SQLite dosyaları Git tarafından yok sayılır.

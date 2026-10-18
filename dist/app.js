@@ -1,5 +1,6 @@
 import {verdict} from './verdict.mjs';
 import {CameraAssistant} from './camera-assistant.mjs';
+import {createAIReport} from './ai-client.mjs';
 import {measure,quality,summarize,cropRect,overlap,METHOD} from './analysis.mjs';
 import {drawDemo,scenarios} from './demo.mjs';
 import {currentUser} from './site.mjs';
@@ -9,6 +10,7 @@ const roles=['reference','sample'];
 let mode='none',stream=null,imageURL=null,selected='reference',busy=false,generation=0,torch=false,lastReport=null,regions=defaults();
 let demoAnimation=null,demoElapsed=0,demoStarted=0,demoPaused=false,demoScenario='stable';
 let assistant=null,adjusting=false,lastAdjustment=0;
+let aiReport=null;
 const settle=()=>new Promise(resolve=>setTimeout(resolve,650));
 function cameraInfo(text){$('cameraHelpStatus').textContent=text;}
 function cameraControls(){
@@ -73,7 +75,7 @@ function updateReadiness(){
 }
 function stopCamera(){assistant?.dispose();assistant=null;adjusting=false;stream?.getTracks().forEach(t=>t.stop());stream=null;video.srcObject=null;torch=false;$('torch').textContent='Fener';cameraInfo('Canlı kamerayı açtığında otomatik destek başlayacak.');}
 function clearSource(){stopCamera();stopDemo();stage.classList.remove('measuring');if(imageURL)URL.revokeObjectURL(imageURL);imageURL=null;$('photo').removeAttribute('src');}
-function invalidate(){$('result').hidden=true;lastReport=null;}
+function invalidate(){aiReport?.dispose();aiReport=null;$('result').hidden=true;lastReport=null;}
 function setMode(next){mode=next;video.hidden=next!=='camera';$('photo').hidden=next!=='photo';$('demoCanvas').hidden=next!=='demo';$('placeholder').hidden=next!=='none';$('regions').hidden=next==='none';$('demoBadge').hidden=next!=='demo';$('demoPanel').hidden=next!=='demo';$('cameraStatus').textContent={none:'Kaynak bekleniyor',camera:'Canlı kamera',photo:'Tek fotoğraf',demo:'Animasyonlu test'}[next];invalidate();controls();drawRegions();}
 function select(role){selected=role;all('.placement [data-role]').forEach(b=>{b.classList.toggle('active',b.dataset.role===role);b.setAttribute('aria-pressed',String(b.dataset.role===role));});all('.roi').forEach(b=>b.classList.toggle('selected',b.dataset.role===role));}
 function drawRegions(){for(const role of roles){const e=document.querySelector(`.roi[data-role="${role}"]`),r=regions[role];Object.assign(e.style,{left:r.x*100+'%',top:r.y*100+'%',width:r.w*100+'%',height:r.h*100+'%'});}select(selected);}
@@ -176,6 +178,7 @@ const number=(n,d=1)=>Number(n).toLocaleString('tr-TR',{minimumFractionDigits:d,
 const date=s=>new Date(s).toLocaleString('tr-TR');
 const rgb=s=>`rgb(${Math.round(s.r)},${Math.round(s.g)},${Math.round(s.b)})`;
 function renderReport(r){
+ aiReport?.dispose();
  lastReport=r;const result=$('result');result.replaceChildren();result.hidden=false;
  if(r.demo)result.append(node('p',`DEMO · ${scenarios[r.demoScenario]?.name||'Sentetik görüntü'}${r.demoPaused?' · Duraklatılmış tek kare':''}. Gerçek bir sıvı numunesini temsil etmez.`,'demo-alert'));
  const v=r.comparison||verdict(r);
@@ -184,6 +187,7 @@ function renderReport(r){
  const swatches=node('div',undefined,'swatches');for(const [role,label]of [['reference',r.referenceName],['sample',r.sampleName]]){const wrap=node('div',undefined,'swatch'),color=node('i');color.style.background=rgb(r[role]);wrap.append(color,node('div',label));swatches.append(wrap);}result.append(swatches);
  if(!v.issues.length){const explanation=node('div',undefined,'result-next');explanation.append(node('b','Neye baktık?'),node('p',v.colorDifference<.025?'Renkleri birbirine yakın görünüyor.':'Renklerinde fark görülüyor.'),node('p',Math.abs(v.relativeOpticalDifference)<.035?'Işığı geçirme görünümleri birbirine yakın.':'Bir taraf kamerada daha koyu görünüyor.'),node('p','Görüntü seri çekim boyunca yeterince sabit kaldı.'));result.append(explanation);}
  result.append(node('p','Bu sonuç yalnızca bu çekimdeki görünümü anlatır. Aynı içerik veya saflık onayı değildir.','hint'));
+ aiReport=createAIReport(r,data=>{if(lastReport===r)r.aiInterpretation=data;});result.append(aiReport.element);
  const next=node('div',undefined,'result-next');next.append(node('b','Şimdi ne yapmalıyım?'),node('p',r.demo?'Bu bir animasyon ölçümüdür. Gerçek karşılaştırma için kamerayı açın veya iki numuneyi birlikte gösteren fotoğraf yükleyin.':'Kutuların kap kenarı ve yansıma içermediğini kontrol edin. Aynı numuneleri tekrar ölçerek farkın tekrarlanıp tekrarlanmadığına bakın.'),button('Tekrar ölç',()=>{invalidate();stage.scrollIntoView({behavior:'smooth',block:'center'});controls();}));result.append(next);
  if(r.notes)result.append(node('p','Not: '+r.notes));
  const details=node('details'),summary=node('summary','Çekim kontrolü ve yöntem');details.append(summary,node('p',`Renk oranı farkı: ${number(v.colorDifference,4)}. Göreli kamera ışık farkı: ${v.relativeOpticalDifference===null?'ölçülemedi':number(v.relativeOpticalDifference,4)}. Yöntem: ${v.method}. Kalibre edilmiş optik yoğunluk değildir. Işık uçuş süresi ölçülmez. Karar eşikleri laboratuvarla doğrulanmamıştır.`));result.append(details);
