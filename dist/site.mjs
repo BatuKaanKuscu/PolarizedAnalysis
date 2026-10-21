@@ -1,3 +1,5 @@
+import './camera.mjs';
+import './documents.mjs';
 import './chemistry-client.mjs';
 const $=id=>document.getElementById(id),all=s=>[...document.querySelectorAll(s)];
 let user=null,authMode='login',view='home';
@@ -7,6 +9,7 @@ function text(tag,value,cls){const n=document.createElement(tag);n.textContent=v
 async function api(path,method='GET',body){let response;try{response=await fetch(path,{method,headers:method==='GET'?{}:{'Content-Type':'application/json'},...(body?{body:JSON.stringify(body)}:{}),signal:AbortSignal.timeout(15000)});}catch{throw new Error('Sunucuya ulaşılamadı. Bağlantıyı kontrol edip tekrar deneyin.');}const result=await response.json();if(!response.ok)throw new Error(result.error||'İşlem tamamlanamadı.');return result;}
 function message(id,value,error=false){$(id).textContent=value;$(id).classList.toggle('error',error);}
 function showView(next){view=next;all('.view').forEach(e=>e.hidden=e.id!=='view-'+next);all('#siteNav [data-nav]').forEach(e=>{const active=e.dataset.nav===next;e.classList.toggle('active',active);if(active)e.setAttribute('aria-current','page');else e.removeAttribute('aria-current');});$('siteNav').classList.remove('open');$('navToggle').setAttribute('aria-expanded','false');$('accountMenu').hidden=true;$('accountToggle').setAttribute('aria-expanded','false');window.dispatchEvent(new CustomEvent('viewchange',{detail:next}));if(next==='profile')renderUser();window.scrollTo({top:0,behavior:'instant'});}
+window.addEventListener('open-library',()=>showView('library'));
 all('[data-nav]').forEach(e=>e.onclick=event=>{event.preventDefault();showView(e.dataset.nav);});
 $('navToggle').onclick=()=>{const open=$('siteNav').classList.toggle('open');$('navToggle').setAttribute('aria-expanded',String(open));};
 $('accountToggle').onclick=()=>{if(!user){openAuth('login');return;}$('accountMenu').hidden=!$('accountMenu').hidden;$('accountToggle').setAttribute('aria-expanded',String(!$('accountMenu').hidden));};
@@ -18,7 +21,7 @@ function renderUser(){
  for(const id of ['accountAvatar','profileLargeAvatar']){$(id).textContent=user.username.slice(0,1).toLocaleUpperCase('tr-TR');$(id).dataset.accent=user.accent;}
  $('profileHeadingName').textContent=user.username;$('profileHandle').textContent='@'+user.username;$('profileUsername').value=user.username;$('profileAccent').value=user.accent;$('accountSince').textContent='Üyelik tarihi: '+new Date(user.createdAt).toLocaleDateString('tr-TR');
 }
-function setUser(next){user=next;renderUser();window.dispatchEvent(new Event('accountchange'));}
+function setUser(next){user=next;renderUser();window.dispatchEvent(new CustomEvent('accountchange',{detail:{owner:next?'user:'+next.id:'guest'}}));}
 function switchAuth(mode){authMode=mode;const register=mode==='register';$('authTitle').textContent=register?'Aramıza katıl.':'Yeniden merhaba.';$('authSubtitle').textContent=register?'Yalnızca kullanıcı adı ve parolayla hesabını oluştur.':'Kullanıcı adın ve parolanla giriş yap.';$('authUsername').required=true;$('passwordHint').hidden=!register;$('authPassword').minLength=register?10:1;$('authPassword').autocomplete=register?'new-password':'current-password';$('authSubmit').textContent=register?'Kullanıcı hesabı oluştur ↗':'Giriş yap ↗';$('loginTab').classList.toggle('active',!register);$('registerTab').classList.toggle('active',register);message('authMessage','');}
 function openAuth(mode){switchAuth(mode);$('authForm').reset();$('authPassword').type='password';$('togglePassword').textContent='Göster';$('togglePassword').setAttribute('aria-pressed','false');if(!$('authDialog').open)$('authDialog').showModal();}
 all('[data-auth]').forEach(e=>e.onclick=()=>openAuth(e.dataset.auth));$('loginTab').onclick=()=>switchAuth('login');$('registerTab').onclick=()=>switchAuth('register');$('authClose').onclick=()=>$('authDialog').close();$('continueGuest').onclick=()=>$('authDialog').close();
@@ -29,4 +32,4 @@ $('menuLogout').onclick=logout;$('profileLogout').onclick=logout;
 $('profileForm').onsubmit=async e=>{e.preventDefault();const button=$('profileForm').querySelector('button');button.disabled=true;try{const result=await api('/api/me','PATCH',{username:$('profileUsername').value,scenario:user?.scenario||'stable',accent:$('profileAccent').value});setUser(result.user);message('profileMessage','Profilin güncellendi.');}catch(error){message('profileMessage',error.message,true);}finally{button.disabled=false;}};
 $('logoutOthers').onclick=async()=>{const button=$('logoutOthers');button.disabled=true;try{const result=await api('/api/auth/logout-others','POST',{});message('sessionMessage',result.count?result.count+' diğer oturum kapatıldı.':'Başka açık oturum bulunmuyor.');}catch(error){message('sessionMessage',error.message,true);}finally{button.disabled=false;}};
 $('passwordForm').onsubmit=async e=>{e.preventDefault();const button=$('passwordForm').querySelector('button');button.disabled=true;try{await api('/api/auth/password','POST',{currentPassword:$('currentPassword').value,newPassword:$('newPassword').value});$('passwordForm').reset();message('passwordMessage','Parolan değiştirildi. Diğer oturumlar kapatıldı.');}catch(error){message('passwordMessage',error.message,true);}finally{button.disabled=false;}};
-api('/api/me').then(result=>setUser(result.user)).catch(()=>message('authMessage','Oturum bilgisi alınamadı. Giriş yaparak tekrar deneyebilirsin.',true));
+api('/api/me').then(result=>setUser(result.user)).catch(()=>{setUser(null);message('authMessage','Oturum bilgisi alınamadı. Giriş yaparak tekrar deneyebilirsin.',true);});

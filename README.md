@@ -1,6 +1,6 @@
 # Liquid Lens · Kiralite kütüphanesi
 
-Kiralite ve stereokimya için Türkçe kaynak kütüphanesi. Ana sayfa, IUPAC/OpenStax bağlantılı rehber, PubChem madde araması ve kullanıcı adıyla hesap/profil akışı vardır. Önceki iki sıvı karşılaştırması, kamera/fotoğraf çekimi ve bunlara bağlı yapay zekâ yorum akışı kaldırılmıştır. Site kamera izni istemez; optik çevirme, enantiyomerik fazlalık veya saflık ölçmez.
+Kiralite ve stereokimya için Türkçe kaynak kütüphanesi. Ana sayfa, IUPAC/OpenStax bağlantılı rehber, PubChem madde araması ve kullanıcı adıyla hesap/profil akışı vardır. İki sıvı karşılaştırması kaldırılmıştır. Kamera ile gözlem/fotoğraf ve cihazda çalışan belge asistanı vardır. Optik çevirme, enantiyomerik fazlalık veya saflık ölçülmez.
 
 ## Çalıştırma
 
@@ -55,6 +55,24 @@ Arama terimi dışında fotoğraf, hesap bilgisi veya kişisel not gönderilmez.
 - [IUPAC: Optical activity](https://goldbook.iupac.org/terms/view/O04303)
 - [OpenStax: R/S ve optik çevirme](https://openstax.org/books/organic-chemistry/pages/5-5-sequence-rules-for-specifying-configuration)
 
+## Kamera ve fotoğraf
+
+Kamera menüsünde izin yalnızca kullanıcı isteğiyle alınır. Çekim sırasında canlı görüntü açık kalır; son fotoğraf önizlenir. Fotoğraf yükleme, silme ve indirme bulunur. Kamera başka sayfaya geçildiğinde, hesap değiştiğinde veya sekme gizlendiğinde durdurulur. Fotoğraflar sunucuya yüklenmez ve kalıcı arşivlenmez. Küçük çekim çubuğu yalnızca kamera sayfasında ekranın altında sabittir. Kullanıcının girdiği adla kütüphane açılabilir; fotoğraftan kimlik/kiralite sınıflandırması yapılmaz.
+
+## Belgelerden çalışan ücretsiz asistan
+
+PDF, UTF-8 TXT/MD/CSV ve JSON dosyaları cihazda okunur. PDF.js 6.4.299 yerel paketlenmiştir; seçilebilir PDF metni sayfa numarasıyla çıkarılır. Şifreli ve taranmış/metinsiz PDF için açıklayıcı hata verilir; OCR yoktur. Sınırlar: 12 belge, dosya başına 8 MB/250.000 çıkarılmış karakter, PDF başına 80 sayfa, toplam 1.000.000 metin karakteri.
+
+Belgeler IndexedDB'de bu tarayıcıda saklanır; sunucuya, PubChem'e veya uzak bir model servisine gönderilmez. Misafir ve kullanıcı kimlikleri arayüzde ayrı belge kapsamları kullanır. Bu depolama şifreli bir belge kasası değildir; ortak cihazda dosyaları silmek kullanıcıya aittir. Cihazlar ve farklı site adresleri arasında eşitleme veya sunucu yedeği yoktur. Tarayıcı verisi silinirse dosyalar yeniden yüklenmelidir. Depolama açılamazsa yalnızca açık oturumda geçici bellek kullanılır. Silme işlemi yerel dizini yeniler, kaynaklı yanıtı temizler ve yerel model worker'ını kapatarak eski belge bağlamını serbest bırakır.
+
+Varsayılan kaynak taraması BM25 benzeri terim ağırlığı ve sınırlı Türkçe/İngilizce kavram eşlemesi kullanır. Metin bölümleri, dosya adı ve varsa PDF sayfasıyla alıntılanır. Kaynak yoksa yanıt uydurulmaz. Bu yöntem bir dil modeli değildir; belgeleri dizine ekler, model ağırlıklarını eğitmez.
+
+İsteğe bağlı gerçek dil modeli: Qwen2.5-0.5B-Instruct-q4f16_1-MLC, WebLLM 0.2.86 aracılığıyla tarayıcı worker'ında WebGPU ile çalışır. Kütüphane ve lisansı uygulamada yereldir. Model ağırlıkları ve MLC WASM dosyaları ancak “Modeli indir ve aç” tıklanınca resmi model/artifact sunucularından indirilir. İlk kullanım yüzlerce MB indirme ve yaklaşık 1 GB GPU belleği isteyebilir. GPU/shader-f16 desteği kontrol edilir; uyumsuz cihazda belge taraması çalışmaya devam eder. API anahtarı veya ücretli model servisi gerekmez. İndirme/kapatma iptali ve yanıtı durdurma vardır.
+
+Qwen, bu proje tarafından sıfırdan eğitilmemiş hazır açık kaynak modeldir. Yalnızca bulunan belge alıntıları soru bağlamına eklenir; ağırlıklar değiştirilmez. Küçük modelin Türkçesi ve çıkarımları hatalı olabilir. Kullanıcı her zaman asıl alıntıları görür. Belgelerdeki talimatlar veri olarak ayrılır; modelin dosya/sunucu işlemleri veya araç erişimi yoktur. Hesap değişiminde yerel model worker'ı kapatılır. Model önbelleği tarayıcı tarafından silinebilir.
+
+Kaynaklar: [WebLLM](https://webllm.mlc.ai/docs/user/get_started.html), [Qwen MLC modeli](https://huggingface.co/mlc-ai/Qwen2.5-0.5B-Instruct-q4f16_1-MLC), [PDF.js](https://mozilla.github.io/pdf.js/). Lisanslar `dist/vendor/` altında yer alır.
+
 ## Kontroller
 
-`npm test`: hesap, geçiş uyumluluğu, HTTP sunucusu ve kimya kütüphanesi testleri. Tarayıcı kontrolleri `node test/site-smoke.mjs` ve `node test/chemistry-browser.mjs` ile çalıştırılır. Kurulu `playwright-core/index.mjs` yolunu `PLAYWRIGHT_MODULE`, tarayıcı yolunu `BROWSER_EXECUTABLE` ile belirtin. Tarayıcı testleri sahte kütüphane yanıtıyla arayüzü sınar; gerçek PubChem bağlantısı ayrıca doğrulanır.
+`npm test`: hesap, geçiş uyumluluğu, HTTP, kimya kütüphanesi, belge indeksleme ve metin okuma testleri. Tarayıcı kontrolleri `test/site-smoke.mjs`, `test/chemistry-browser.mjs`, `test/documents-browser.mjs`, `test/local-model-browser.mjs` dosyalarıyla çalıştırılır. Kurulu `playwright-core/index.mjs` yolunu `PLAYWRIGHT_MODULE`, tarayıcı yolunu `BROWSER_EXECUTABLE` ile belirtin. PDF/metin okuma, kaynaklar, kalıcılık, kullanıcı kapsamı, silme, canlı çekim, yerel model kitaplığının yüklenmesi ve GPU yokluğunda geri dönüş doğrulanır. Gerçek Qwen yanıt üretimi, yeterli WebGPU donanımında ayrıca denenmelidir; bu testte model ağırlıkları indirilmez.

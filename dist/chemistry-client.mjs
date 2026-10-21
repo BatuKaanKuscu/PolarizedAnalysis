@@ -19,3 +19,5 @@ $('chemForm').onsubmit=async e=>{
 };
 document.querySelectorAll('[data-chemical]').forEach(b=>b.onclick=()=>{$('chemQuery').value=b.dataset.chemical;$('chemForm').requestSubmit();});
 window.addEventListener('viewchange',e=>{if(e.detail!=='library'&&controller){generation++;controller.abort();controller=null;loading(false);if(!$('chemResults').children.length)$('chemStatus').textContent='Madde adı veya CAS numarasıyla yeniden arayabilirsin.';}});
+
+window.addEventListener('open-library',e=>{const query=e.detail?.query;if(typeof query==='string'&&query.trim().length>=2){$('chemQuery').value=query.trim();$('chemForm').requestSubmit();}});
