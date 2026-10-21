@@ -76,3 +76,6 @@ Kaynaklar: [WebLLM](https://webllm.mlc.ai/docs/user/get_started.html), [Qwen MLC
 ## Kontroller
 
 `npm test`: hesap, geçiş uyumluluğu, HTTP, kimya kütüphanesi, belge indeksleme ve metin okuma testleri. Tarayıcı kontrolleri `test/site-smoke.mjs`, `test/chemistry-browser.mjs`, `test/documents-browser.mjs`, `test/local-model-browser.mjs` dosyalarıyla çalıştırılır. Kurulu `playwright-core/index.mjs` yolunu `PLAYWRIGHT_MODULE`, tarayıcı yolunu `BROWSER_EXECUTABLE` ile belirtin. PDF/metin okuma, kaynaklar, kalıcılık, kullanıcı kapsamı, silme, canlı çekim, yerel model kitaplığının yüklenmesi ve GPU yokluğunda geri dönüş doğrulanır. Gerçek Qwen yanıt üretimi, yeterli WebGPU donanımında ayrıca denenmelidir; bu testte model ağırlıkları indirilmez.
+
+
+Belge asistanı: Dosya seçerek bölüm bölüm Türkçe özet veya Türkçe/İngilizce/Almanca/Fransızca/İspanyolca çeviri oluşturulabilir. Bu işlemler için isteğe bağlı yerel model açılmalıdır. Qwen2.5 1.5B önerilen, 0.5B hafif seçenektir; WebGPU gerekir. Tamamlanmamış işlem kısmi olarak etiketlenir; sonuç TXT olarak indirilebilir. Model çıktıları kontrol gerektirir. Belgeler model eğitimi için kullanılmaz.
