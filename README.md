@@ -79,3 +79,6 @@ Kaynaklar: [WebLLM](https://webllm.mlc.ai/docs/user/get_started.html), [Qwen MLC
 
 
 Belge asistanı: Dosya seçerek bölüm bölüm Türkçe özet veya Türkçe/İngilizce/Almanca/Fransızca/İspanyolca çeviri oluşturulabilir. Bu işlemler için isteğe bağlı yerel model açılmalıdır. Qwen2.5 1.5B önerilen, 0.5B hafif seçenektir; WebGPU gerekir. Tamamlanmamış işlem kısmi olarak etiketlenir; sonuç TXT olarak indirilebilir. Model çıktıları kontrol gerektirir. Belgeler model eğitimi için kullanılmaz.
+
+
+İnternet terim araştırması: Belge asistanındaki işlem listesinden seçilir; dosya veya model gerektirmez. /api/research/search?q=terim, Vikipedi Türkçe giriş metinlerini arar; sonuç yoksa İngilizce dener. Üç kaynak, bağlantı, dil, erişim zamanı ve lisans gösterilir. Yerel model açıksa kaynak numaralı sade açıklama üretir. Yalnızca arama terimi dış kaynağa gider; belge içerikleri gönderilmez. Genel web/son dakika haber araması değildir. Sabit sağlayıcı, 10 saniyelik istek sınırı, 15 dakika önbellek, istemci başına dakikada 20 istek ve eşzamanlılık sınırı kullanılır.

@@ -1,15 +1,18 @@
+import {createResearch} from './research.mjs';
 import { createServer } from 'node:http';
 import { readFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import { resolve, sep, extname } from 'node:path';
 import {createAuth} from './auth.mjs';
 import {createChemistry} from './chemistry.mjs';
+const research=createResearch();
 const auth=createAuth();
 const chemistry=createChemistry();
 
 const root = fileURLToPath(new URL('./dist/', import.meta.url));
 const types = { '.html': 'text/html; charset=utf-8', '.css': 'text/css; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.mjs': 'text/javascript; charset=utf-8', '.svg': 'image/svg+xml' };
 const server = createServer(async (req, res) => {
+  if(await research.handle(req,res))return;
   if(await chemistry.handle(req,res))return;
   if(await auth.handle(req,res))return;
   if (req.method !== 'GET' && req.method !== 'HEAD') {
