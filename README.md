@@ -84,6 +84,16 @@ Model yanıtları HTML olarak çalıştırılmaz. Yeni ölçüm/eski sonucu kapa
 
 Yapay zekâ sunucu testleri `npm test` kapsamındadır. `node test/ai-browser.mjs`, mevcut tarayıcı testiyle aynı `PLAYWRIGHT_MODULE` ve `BROWSER_EXECUTABLE` ayarlarını kullanır; onay, veri azaltma, kota hatası, yeniden deneme ve mobil görünümü sahte servisle sınar. Gerçek Gemini yanıtı, geçerli API anahtarı olmadan test edilemez.
 
+## Çevrimiçi kimya kütüphanesi
+
+Kimya kütüphanesi menüsü, kullanıcı tarafından girilen madde adı veya CAS numarasıyla PubChem PUG-REST servisinden kayıt arar. API anahtarı gerekmez. Yaygın Türkçe adların sınırlı bir eşleme listesi vardır; genel Türkçe çeviri yapılmaz. Zeytinyağı, süt, benzin gibi tanımlanmış karışım adları tek bir bileşik olarak sunulmaz. Bir ad birden çok kayda karşılık gelebilir; ilk beş kayıt ayrı gösterilir.
+
+Kayıt başlığı, CID, molekül formülü, molekül ağırlığı ve IUPAC adı kaynaklarıyla gösterilir. PubChem kaynak bağlantısı ve NIST Chemistry WebBook ad arama bağlantısı bulunur. NIST spektrum verisi indirilmez, spektrum varlığı doğrulanmaz veya garanti edilmez. Spektrum eşleştirme/madde teşhisi yoktur; kamera RGB verisi Raman/IR ölçümü yerine geçirilmez. Model yorumu, kütüphaneden gelen kimlik olarak sunulmaz.
+
+`GET /api/chemistry/search?q=...` yalnızca sınırlı uzunlukta ad/CAS girdisi alır ve sabit PubChem adresine istek yapar. Fotoğraf, kullanıcı adı ve ölçüm notları gönderilmez. Kullanıcı arama yapmadan ağ isteği oluşmaz. Başarılı yanıtlar bellekte 20 dakika, en fazla 100 arama için tutulur; istek başına 10 saniye zaman aşımı, eşzamanlı 2 sorgu ve soket IP başına dakikada 20 arama sınırı vardır. Vekil sunucu arkasında IP sınırı paylaşılabilir. Kaynak hatasında eski bilgi yeni arama sonucu gibi gösterilmez. Yaygın karışım açıklamaları yerel açıklamadır, PubChem'den gelmiş gibi sunulmaz.
+
+Kaynaklar: [PubChem PUG-REST](https://pubchem.ncbi.nlm.nih.gov/docs/pug-rest), [IUPAC uygulama örnekleri](https://iupac.github.io/WFChemCookbook/datasources/pubchem_pugrest2.html), [NIST ad araması](https://webbook.nist.gov/chemistry/name-ser/).
+
 ## Veri ve testler
 
 Görüntüler cihazda işlenir ve sunucuya gönderilmez. Ölçüm arşivi yoktur; kullanıcı isterse o anki görsel sonucu JSON olarak indirebilir veya yazdırabilir. Hesap bilgileri SQLite'ta saklanır. `.data/` ve SQLite dosyaları Git tarafından yok sayılır.

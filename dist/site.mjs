@@ -1,4 +1,5 @@
 import {drawDemo} from './demo.mjs';
+import './chemistry-client.mjs';
 const $=id=>document.getElementById(id),all=s=>[...document.querySelectorAll(s)];
 let user=null,authMode='login',view='home',heroFrame=null;
 export const currentUser=()=>user;
