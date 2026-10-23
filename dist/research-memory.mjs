@@ -1,0 +1,7 @@
+let database;
+function open(){return database??=new Promise((resolve,reject)=>{const request=indexedDB.open('liquid-lens-research-memory',1);request.onupgradeneeded=()=>{const store=request.result.createObjectStore('documents',{keyPath:'key'});store.createIndex('owner','owner');};request.onsuccess=()=>resolve(request.result);request.onerror=()=>{database=null;reject(new Error('Bu tarayıcı belge saklamayı açamadı.'));};request.onblocked=()=>reject(new Error('Diğer açık sekmeleri kapatıp yeniden dene.'));});}
+async function transaction(mode,run){const db=await open();return new Promise((resolve,reject)=>{const tx=db.transaction('documents',mode),store=tx.objectStore('documents');let value;run(store,r=>value=r);tx.oncomplete=()=>resolve(value);tx.onerror=()=>reject(new Error('Belge kaydedilemedi. Tarayıcı depolama alanını kontrol et.'));tx.onabort=()=>reject(new Error('Belge işlemi tamamlanamadı.'));});}
+export const listMemory=owner=>transaction('readonly',(store,set)=>{const r=store.index('owner').getAll(owner);r.onsuccess=()=>set(r.result);});
+export const saveMemory=(owner,document)=>transaction('readwrite',store=>store.put({...document,owner,key:owner+':'+document.id}));
+export const removeMemory=(owner,id)=>transaction('readwrite',store=>store.delete(owner+':'+id));
+export const clearMemory=owner=>transaction('readwrite',store=>{const request=store.index('owner').openCursor(IDBKeyRange.only(owner));request.onsuccess=()=>{const c=request.result;if(c){c.delete();c.continue();}};});
