@@ -4,6 +4,7 @@ try{
  const port=await new Promise(r=>server.stdout.once('data',d=>r(String(d).match(/port (\d+)/)[1])));browser=await chromium.launch({executablePath:'C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe',headless:true});const page=await browser.newPage(),errors=[];page.on('pageerror',e=>errors.push(e.message));
  await page.addInitScript(()=>{
   window.recognizers=[];window.spoken=[];window.modelCalls=[];window.cancelCount=0;
+  const permission={state:'prompt',onchange:null};window.micTracks=[];Object.defineProperty(navigator,'permissions',{value:{query:async()=>permission},configurable:true});Object.defineProperty(navigator,'mediaDevices',{value:{getUserMedia:async()=>{permission.state='granted';permission.onchange?.();const track={stopped:false,stop(){this.stopped=true;}};window.micTracks.push(track);return {getTracks:()=>[track]};}},configurable:true});
   class Recognition{constructor(){window.recognizers.push(this);}start(){this.started=true;this.onstart?.();}abort(){this.aborted=true;this.onend?.();}result(text,final=true){const row=[{transcript:text}];row.isFinal=final;this.onresult?.({results:[row]});}finish(){this.onend?.();}fail(error){this.onerror?.({error});this.onend?.();}}
   Object.defineProperty(window,'SpeechRecognition',{value:Recognition,configurable:true});
   Object.defineProperty(window,'SpeechSynthesisUtterance',{value:class{constructor(text){this.text=text;}},configurable:true});

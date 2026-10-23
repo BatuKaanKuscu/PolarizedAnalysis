@@ -6,25 +6,78 @@ export function speechChunks(value,max=220,limit=6000){
  return {chunks,truncated};
 }
 export function recognitionError(code){return ({'not-allowed':'Mikrofon izni verilmedi. Tarayıcının site izinlerinden mikrofonu açıp yeniden dene.','service-not-allowed':'Tarayıcı ses tanıma servisine izin vermedi. Yazılı sohbeti kullanabilirsin.','audio-capture':'Mikrofon bulunamadı veya başka bir uygulama tarafından kullanılıyor.','network':'Ses tanıma servisine ulaşılamadı. Bağlantını kontrol edip yeniden dene.','no-speech':'Ses algılanmadı. Konuş düğmesiyle tekrar deneyebilirsin.','language-not-supported':'Seçili konuşma dili bu cihazda desteklenmiyor.','aborted':'Dinleme durduruldu.'})[code]||'Konuşma tanınamadı. Yeniden deneyebilir veya sorunu yazabilirsin.';}
+export function microphoneError(error){return ({NotAllowedError:'Mikrofon erişimi engellendi. Adres çubuğundaki site ayarlarından Mikrofon → İzin ver seç; tarayıcı ve sistem izinlerini kontrol et.',SecurityError:'Bu sayfanın mikrofon erişimi tarayıcı veya sayfa güvenlik ayarlarıyla engellenmiş.',NotFoundError:'Mikrofon bulunamadı. Bir mikrofon bağlayıp yeniden dene.',NotReadableError:'Mikrofon açılamadı. Başka bir uygulama kullanıyor olabilir; sistem mikrofon ayarlarını kontrol et.',AbortError:'Mikrofon başlatılamadı. Yeniden deneyebilirsin.'})[error?.name]||'Mikrofona erişilemedi. Site izinlerini ve bağlı mikrofonu kontrol et.';}
 export function createVoiceAssistant({canAsk,onQuestion,onCancel}){
  const $=id=>document.getElementById(id),Recognition=window.SpeechRecognition||window.webkitSpeechRecognition,synth=window.speechSynthesis;
  const supportsSpeech=!!(synth&&window.SpeechSynthesisUtterance),supportsRecognition=!!Recognition&&window.isSecureContext;
  let active=false,listening=false,speaking=false,waiting=false,recognizer=null,recognitionVersion=0,speechVersion=0,lastAnswer='',restartTimer=null,listenTimer=null,utterance=null,choices=[],appReady=false,appBusy=false;
+ let microphonePermission='unknown',requesting=false,permissionTask=null,permissionVersion=0,permissionCheckVersion=0,permissionTimer=null,permissionStatus=null;
  const note=text=>$('voiceStatus').textContent=text;
  function render(){
   const available=appReady&&canAsk(),questionMode=['auto','web','question','general'].includes($('documentTask').value);
-  $('voiceStart').disabled=!supportsRecognition||!available||appBusy;
-  $('voiceStart').textContent=active?'Konuş / Söz al':'Sesli sohbeti başlat';
-  $('voiceEnd').disabled=!active&&!listening&&!speaking&&!waiting;
+  $('voiceStart').disabled=!supportsRecognition||!available||appBusy||!!permissionTask;
+  $('voiceStartLabel').textContent=!Recognition?'Ses tanıma kullanılamıyor':!window.isSecureContext?'Güvenli bağlantı gerekiyor':requesting?'İzin bekleniyor…':listening?'Seni dinliyorum':speaking?'Söz almak için dokun':active?'Konuş / Söz al':'Konuşmaya başla';$('voiceStart').setAttribute('aria-label',active?'Konuş / Söz al':'Sesli sohbeti başlat');
+  $('voiceEnd').disabled=!active&&!listening&&!speaking&&!waiting&&!requesting;
   $('voiceRead').disabled=!supportsSpeech||!lastAnswer||appBusy||listening;
   $('voiceStopSpeech').disabled=!speaking;
   $('voiceLanguage').disabled=active||appBusy||speaking;
   $('voiceSpeaker').disabled=speaking||!supportsSpeech;
   $('voiceRate').disabled=speaking||!supportsSpeech;
-  $('voicePanel').dataset.state=listening?'listening':speaking?'speaking':waiting?'waiting':'idle';
+  $('voicePanel').dataset.state=requesting?'permission':listening?'listening':speaking?'speaking':waiting?'waiting':'idle';
   $('voiceStart').setAttribute('aria-pressed',String(active));
-  $('voiceSupport').textContent=!questionMode?'Sesli sohbet için bir soru/araştırma modu seç.':!window.isSecureContext?'Mikrofon için HTTPS veya localhost gerekir.':!Recognition?'Bu tarayıcı ses tanımayı desteklemiyor; sorunu yazabilirsin.':!supportsSpeech?'Ses tanıma hazır; cihazda sesli okuma kullanılamıyor.':'Mikrofon yalnızca sesli sohbeti başlattığında açılır.';
+  $('voiceSupport').textContent=!questionMode?'Sesli sohbet için bir soru/araştırma modu seç.':!window.isSecureContext?'Mikrofon için HTTPS veya localhost gerekir.':!Recognition?'Bu tarayıcı ses tanımayı desteklemiyor; sorunu yazabilirsin.':!supportsSpeech?'Ses tanıma hazır; cihazda sesli okuma kullanılamıyor.':'Mikrofon izni ile ses tanıma desteği ayrı kontrollerdir. Sesi burada kaydetmiyoruz.';renderPermission();
  }
+ function renderPermission(){
+  const labels={unknown:'İzin durumu kontrol edilmedi',prompt:'Mikrofon izni gerekiyor',granted:'Mikrofon izni açık',denied:'Mikrofon erişimi engellendi',error:'Mikrofon kontrol edilmeli'};
+  $('voicePermissionLabel').textContent=!window.isSecureContext?'Mikrofon için HTTPS gerekli':!navigator.mediaDevices?.getUserMedia?'Bu tarayıcıda mikrofon erişimi yok':requesting?'Tarayıcıdan izin bekleniyor…':labels[microphonePermission]||labels.unknown;
+  $('voicePermission').dataset.permission=requesting?'pending':microphonePermission;
+  $('voiceRequestPermission').textContent=permissionTask?'İzin yanıtı bekleniyor…':microphonePermission==='granted'?'Mikrofonu kontrol et':'Mikrofon izni ver';
+  $('voiceRequestPermission').disabled=!appReady||appBusy||!!permissionTask||active||listening||speaking||!window.isSecureContext||!navigator.mediaDevices?.getUserMedia;
+  $('voiceCheckPermission').disabled=requesting;
+  $('voiceRecognitionBadge').textContent=Recognition?'Ses tanıma destekleniyor':'Ses tanıma desteklenmiyor';
+ }
+ async function checkPermission(){
+  const version=++permissionCheckVersion;
+  if(!window.isSecureContext||!navigator.mediaDevices?.getUserMedia){render();return;}
+  try{
+   const result=await navigator.permissions.query({name:'microphone'});if(version!==permissionCheckVersion)return;
+   const update=()=>{
+    microphonePermission=['granted','denied','prompt'].includes(result.state)?result.state:'unknown';
+    if(microphonePermission==='denied'&&!requesting&&(active||listening||speaking||waiting))stop('Mikrofon izni kaldırıldı; sesli sohbet durduruldu.');
+    if(microphonePermission==='denied')$('voicePermissionHelp').open=true;
+    render();
+   };
+   if(permissionStatus)permissionStatus.onchange=null;permissionStatus=result;result.onchange=update;update();
+  }catch{render();}
+ }
+ async function requestPermission(startAfter=false){
+  if(permissionTask||!appReady||appBusy)return;
+  if(!window.isSecureContext||!navigator.mediaDevices?.getUserMedia){note('Mikrofon izni için siteyi HTTPS üzerinden, kendi tarayıcı sekmesinde aç.');$('voicePermissionHelp').open=true;render();return;}
+  const version=++permissionVersion;permissionCheckVersion++;requesting=true;
+  if(startAfter)active=true;
+  clearRestart();stopRecognition();stopSpeech();note('Tarayıcının mikrofon izin penceresinde İzin ver seçeneğini seç.');
+  let task;try{task=navigator.mediaDevices.getUserMedia({audio:true,video:false});}catch(error){requesting=false;active=false;microphonePermission=error?.name==='NotAllowedError'?'denied':'error';note(microphoneError(error));$('voicePermissionHelp').open=true;render();return;}
+  permissionTask=task;render();
+  permissionTimer=setTimeout(()=>{if(version===permissionVersion&&requesting){note('Tarayıcıdan yanıt bekleniyor. Pencere görünmüyorsa adres çubuğundaki mikrofon veya site izinlerini kontrol et.');$('voicePermissionHelp').open=true;}},12000);
+  let granted=false;
+  try{
+   const stream=await task;
+   // Permission is checked with a short-lived stream. Never keep it alongside recognition.
+   stream.getTracks().forEach(track=>track.stop());
+   if(version!==permissionVersion)return;
+   microphonePermission='granted';granted=true;
+   note(Recognition?'Mikrofon erişimi hazır. Konuşmaya başlayabilirsin.':'Mikrofon izni açık; bu tarayıcı ses tanımayı desteklemiyor. Yazılı sohbeti ve sesli okumayı kullanabilirsin.');
+  }catch(error){
+   if(version!==permissionVersion)return;
+   active=false;microphonePermission=['NotAllowedError','SecurityError'].includes(error?.name)?'denied':'error';
+   note(microphoneError(error));$('voicePermissionHelp').open=true;
+  }finally{
+   clearTimeout(permissionTimer);permissionTask=null;
+   if(version===permissionVersion){requesting=false;render();if(granted&&startAfter&&active&&!document.hidden&&!$('view-assistant').hidden)listen();}
+   else render();
+  }
+ }
+
  function stopRecognition(){
   recognitionVersion++;clearTimeout(listenTimer);listenTimer=null;const previous=recognizer;recognizer=null;listening=false;
   if(previous){previous.onstart=previous.onresult=previous.onerror=previous.onend=previous.onspeechend=null;try{previous.abort();}catch{}}
@@ -32,7 +85,7 @@ export function createVoiceAssistant({canAsk,onQuestion,onCancel}){
  function stopSpeech(){speechVersion++;speaking=false;utterance=null;if(supportsSpeech)synth.cancel();}
  function clearRestart(){clearTimeout(restartTimer);restartTimer=null;}
  function stop(message='Sesli sohbet kapatıldı.',cancel=true){
-  const shouldCancel=active&&waiting;active=false;waiting=false;clearRestart();stopRecognition();stopSpeech();if(cancel&&shouldCancel)onCancel();note(message);render();
+  const shouldCancel=active&&waiting;permissionVersion++;requesting=false;clearTimeout(permissionTimer);active=false;waiting=false;clearRestart();stopRecognition();stopSpeech();if(cancel&&shouldCancel)onCancel();note(message);render();
  }
  function reset(message='Sesli sohbet hazır.'){stop(message);lastAnswer='';$('voiceTranscript').textContent='';render();}
  function populateVoices(){
@@ -89,7 +142,9 @@ export function createVoiceAssistant({canAsk,onQuestion,onCancel}){
   };
   try{rec.start();}catch{failed=true;stopRecognition();active=false;note('Mikrofon başlatılamadı. Site izinlerini kontrol edip yeniden dene.');render();}
  }
- $('voiceStart').onclick=()=>{if(!canAsk()||appBusy)return;active=true;listen();};
+ $('voiceStart').onclick=()=>{if(!canAsk()||appBusy||permissionTask)return;if(microphonePermission!=='granted'){void requestPermission(true);return;}active=true;listen();};
+ $('voiceRequestPermission').onclick=()=>void requestPermission(false);
+ $('voiceCheckPermission').onclick=()=>void checkPermission();
  $('voiceEnd').onclick=()=>stop();
  $('voiceRead').onclick=()=>speak(lastAnswer);
  $('voiceStopSpeech').onclick=()=>{clearRestart();stopSpeech();note('Seslendirme durduruldu.');render();};
@@ -101,7 +156,7 @@ export function createVoiceAssistant({canAsk,onQuestion,onCancel}){
  document.addEventListener('visibilitychange',()=>{if(document.hidden&&(active||listening||speaking||waiting))stop('Sekme arka plana geçti; sesli sohbet durduruldu.');});
  window.addEventListener('pagehide',()=>stop());
  if(supportsSpeech)synth.addEventListener?.('voiceschanged',populateVoices);
- populateVoices();render();
+ populateVoices();render();void checkPermission();
  return {
   isActive:()=>active,
   sync({ready,busy}){appReady=ready;appBusy=busy;render();},
