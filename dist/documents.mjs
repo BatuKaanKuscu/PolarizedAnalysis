@@ -93,6 +93,12 @@ function renderConversation(){
   reuse.type='button';reuse.disabled=busy;reuse.onclick=()=>{$('documentQuestion').value=turn.question;$('documentQuestion').focus();};item.append(heading,node('small',turn.label),answer,reuse);list.append(item);}
 }
 function clearConversation(){conversation=[];renderConversation();}
+function setAssistantInput(mode){
+ const spoken=mode==='voice';$('voicePanel').hidden=!spoken;$('assistantVoiceTab').setAttribute('aria-pressed',String(spoken));$('assistantTextTab').setAttribute('aria-pressed',String(!spoken));
+ if(!spoken)voice.suspend();
+}
+$('assistantTextTab').onclick=()=>setAssistantInput('text');
+$('assistantVoiceTab').onclick=()=>setAssistantInput('voice');
 $('jumpToModel').onclick=()=>{const panel=document.querySelector('.local-model');panel.open=true;panel.scrollIntoView({behavior:'smooth',block:'start'});if(!$('enableModel').disabled)$('enableModel').focus({preventScroll:true});};
 $('newConversation').onclick=()=>{if(busy||!owner)return;resetAnswer();clearConversation();$('documentQuestion').value='';activity('idle','Yeni sohbet hazır.');$('documentQuestion').focus();controls();};
 
@@ -108,7 +114,7 @@ $('documentTask').onchange=()=>{
  $('documentQuestion').hidden=!isQuestion;$('documentQuestion').required=isQuestion;$('documentQuestion').maxLength=task==='web'?160:500;
  $('documentQuestion').placeholder=task==='auto'||task==='general'?'Örn. Fotosentez nasıl çalışır? / Bir Python örneği yaz':task==='web'?'Örn. Kiralite nedir? / optical rotation':'Örn. Belgelerde kiralite nasıl tanımlanıyor?';
  document.querySelector('label[for="documentQuestion"]').hidden=!isQuestion;
- $('researchPrivacy').hidden=!['web','auto'].includes(task);
+ $('researchPrivacy').hidden=!['web','auto'].includes(task);$('researchPrivacyMore').hidden=$('researchPrivacy').hidden;
  $('askDocuments').textContent=task==='auto'?'Sor ve araştır ↗':task==='general'?'Yerel modele sor ↗':task==='web'?'İnternette araştır ↗':task==='question'?'Kaynaklardan yanıt bul ↗':task==='summary'?'Dosyayı özetle ↗':'Dosyayı çevir ↗';resetAnswer();controls();
 };
 async function runDocumentTask(){
