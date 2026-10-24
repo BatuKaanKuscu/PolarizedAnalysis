@@ -8,7 +8,7 @@ try{
  const ready=()=>page.waitForFunction(()=>!document.getElementById('askDocuments').disabled),ask=async q=>{await page.locator('#documentQuestion').fill(q);await page.locator('#askDocuments').click();await ready();};
  await page.goto('http://127.0.0.1:'+port);await page.locator('#siteNav [data-nav="assistant"]').click();await ready();
  await page.locator('#documentQuestion').fill('Merhaba');await page.locator('#documentQuestion').press('Enter');await ready();
- assert.equal(searches.length,0);assert.equal(await page.locator('.chat-user p').textContent(),'Merhaba');assert.ok((await page.locator('.chat-assistant p').textContent()).includes('Ben Luma'));assert.equal(await page.locator('#chatFeed').isVisible(),true);
+ assert.equal(searches.length,0);assert.equal(await page.locator('.chat-user p').textContent(),'Merhaba');assert.ok((await page.locator('.chat-assistant p').textContent()).includes('Ben Antony'));assert.equal(await page.locator('#chatFeed').isVisible(),true);
  await page.locator('#documentQuestion').fill('Bir satır');await page.locator('#documentQuestion').press('Shift+Enter');assert.ok((await page.locator('#documentQuestion').inputValue()).includes('\n'));assert.equal(await page.locator('.chat-exchange').count(),1);
  await page.locator('#newConversation').click();assert.equal(await page.locator('.chat-exchange').count(),0);
  await page.locator('#jumpToModel').click();assert.equal(await page.locator('.local-model').evaluate(n=>n.open),true);await page.locator('#enableModel').click();await page.waitForFunction(()=>document.getElementById('modelStatus').textContent.includes('hazır'));
